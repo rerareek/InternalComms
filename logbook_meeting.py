@@ -1,3 +1,4 @@
+import calendar
 import hmac
 from datetime import date
 
@@ -85,6 +86,89 @@ def pic_options(df):
     return sorted(set(DEFAULT_PICS) | used)
 
 
+# ---------- Company Details: helpers ----------
+MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+DAYS = list(range(1, 32))
+
+
+def fmt_dm(v):
+    """'09-13' -> '13-Sep'"""
+    if not v:
+        return ""
+    m, d = v.split("-")
+    return f"{int(d)}-{MONTHS[int(m) - 1]}"
+
+
+def to_dm(day, month_name):
+    """(13, 'Sep') -> '09-13'. Kosong dua-duanya -> None."""
+    if day is None and month_name is None:
+        return None
+    if day is None or month_name is None:
+        raise ValueError("Isi tanggal dan bulan sekaligus, atau kosongkan keduanya.")
+    m = MONTHS.index(month_name) + 1
+    if day > calendar.monthrange(2000, m)[1]:
+        raise ValueError(f"Tanggal {day} tidak valid untuk bulan {month_name}.")
+    return f"{m:02d}-{day:02d}"
+
+
+def split_dm(v):
+    if not v:
+        return None, None
+    m, d = v.split("-")
+    return int(d), MONTHS[int(m) - 1]
+
+
+def days_until(v):
+    m, d = map(int, v.split("-"))
+    today = date.today()
+    for yr in range(today.year, today.year + 5):
+        try:
+            target = date(yr, m, d)
+        except ValueError:  # 29 Feb di tahun non-kabisat
+            continue
+        if target >= today:
+            return (target - today).days
+    return None
+
+
+def load_companies():
+    return sb.table("companies").select("*").order("shipping_line").execute().data
+
+
+def load_contacts():
+    return sb.table("contacts").select("*").order("id").execute().data
+
+
+def flat_rows(companies, by_co, blank_repeat):
+    """Baris datar ala Excel. blank_repeat=True -> kolom company dikosongkan di baris kontak ke-2 dst."""
+    rows = []
+    for no, c in enumerate(companies, 1):
+        for i, p in enumerate(by_co.get(c["id"]) or [None]):
+            show_co = i == 0 or not blank_repeat
+            rows.append(
+                {
+                    "No": str(no) if show_co else "",
+                    "Shipping Line": c["shipping_line"] if show_co else "",
+                    "Address": (c.get("address") or "") if show_co else "",
+                    "Company Anniversary": fmt_dm(c.get("anniversary")) if show_co else "",
+                    "Name": p["name"] if p else "",
+                    "Birth Date": fmt_dm(p.get("birth_date")) if p else "",
+                    "Position": (p.get("position") or "") if p else "",
+                    "Email": (p.get("email") or "") if p else "",
+                }
+            )
+    return rows
+
+
+def dm_inputs(label_prefix, key, current=None):
+    """Dua selectbox tanggal + bulan. Return (day, month_name)."""
+    d0, m0 = split_dm(current)
+    c1, c2 = st.columns(2)
+    day = c1.selectbox(f"{label_prefix} - Tanggal", DAYS, index=DAYS.index(d0) if d0 else None, key=f"{key}_d")
+    mon = c2.selectbox(f"{label_prefix} - Bulan", MONTHS, index=MONTHS.index(m0) if m0 else None, key=f"{key}_m")
+    return day, mon
+
+
 # ---------- UI ----------
 require_login()
 sb = get_client()
@@ -94,7 +178,9 @@ options = pic_options(df_all)
 st.title("📒 Log Book Meeting")
 st.caption("Catat kegiatan harian marketing & cek historinya.")
 
-tab_input, tab_history, tab_edit = st.tabs(["➕ Input Baru", "🔎 History", "✏️ Edit / Hapus"])
+tab_input, tab_history, tab_edit, tab_company = st.tabs(
+    ["➕ Input Baru", "🔎 History", "✏️ Edit / Hapus", "🏢 Company Details"]
+)
 
 # ----- Input -----
 with tab_input:
@@ -221,3 +307,246 @@ with tab_edit:
             delete_row(sel)
             st.warning("Entri dihapus.")
             st.rerun()
+
+# ----- Company Details -----
+with tab_company:
+    companies = load_companies()
+    contacts = load_contacts()
+    co_by_id = {c["id"]: c for c in companies}
+    by_co = {}
+    for p in contacts:
+        by_co.setdefault(p["company_id"], []).append(p)
+
+    page = st.radio(
+        "Menu",
+        ["Daftar", "Tambah Company", "Tambah Kontak", "Edit / Hapus"],
+        horizontal=True,
+        key="co_page",
+        label_visibility="collapsed",
+    )
+
+    # ---- Daftar ----
+    if page == "Daftar":
+        if not companies:
+            st.info("Belum ada company. Tambah lewat menu 'Tambah Company'.")
+        else:
+            events = []
+            for c in companies:
+                n = days_until(c["anniversary"]) if c.get("anniversary") else None
+                if n is not None and n <= 30:
+                    events.append((n, f"🏢 Anniversary {c['shipping_line']} ({fmt_dm(c['anniversary'])})"))
+            for p in contacts:
+                n = days_until(p["birth_date"]) if p.get("birth_date") else None
+                if n is not None and n <= 30:
+                    co_name = co_by_id.get(p["company_id"], {}).get("shipping_line", "-")
+                    events.append((n, f"🎂 Ulang tahun {p['name']}, {co_name} ({fmt_dm(p['birth_date'])})"))
+            if events:
+                with st.container(border=True):
+                    st.markdown("**Dalam 30 hari ke depan**")
+                    for n, text in sorted(events):
+                        when = "Hari ini" if n == 0 else f"{n} hari lagi"
+                        st.write(f"{when} · {text}")
+
+            q = st.text_input("Cari (shipping line / nama / position)", key="co_search").strip().lower()
+            view = st.radio("Tampilan", ["Per company", "Tabel (format Excel)"], horizontal=True, key="co_view")
+
+            def match(c):
+                if not q:
+                    return True
+                hay = [c["shipping_line"]]
+                for p in by_co.get(c["id"], []):
+                    hay += [p["name"], p.get("position") or ""]
+                return any(q in h.lower() for h in hay)
+
+            shown = [c for c in companies if match(c)]
+            st.write(f"**{len(shown)}** company")
+
+            if view == "Per company":
+                for c in shown:
+                    cs = by_co.get(c["id"], [])
+                    with st.expander(f"{c['shipping_line']} ({len(cs)} kontak)"):
+                        st.markdown(f"**Address:** {c.get('address') or '-'}")
+                        st.markdown(f"**Company Anniversary:** {fmt_dm(c.get('anniversary')) or '-'}")
+                        if cs:
+                            st.dataframe(
+                                pd.DataFrame(
+                                    [
+                                        {
+                                            "Name": p["name"],
+                                            "Birth Date": fmt_dm(p.get("birth_date")),
+                                            "Position": p.get("position") or "",
+                                            "Email": p.get("email") or "",
+                                        }
+                                        for p in cs
+                                    ]
+                                ),
+                                use_container_width=True,
+                                hide_index=True,
+                            )
+                        else:
+                            st.caption("Belum ada kontak.")
+            else:
+                st.dataframe(pd.DataFrame(flat_rows(shown, by_co, True)), use_container_width=True, hide_index=True)
+
+            st.download_button(
+                "⬇️ Download CSV",
+                pd.DataFrame(flat_rows(shown, by_co, False)).to_csv(index=False).encode("utf-8"),
+                file_name="company_details.csv",
+                mime="text/csv",
+            )
+
+    # ---- Tambah Company ----
+    elif page == "Tambah Company":
+        with st.form("form_company", clear_on_submit=True):
+            sl = st.text_input("Shipping Line", placeholder="mis. CMA CGM")
+            addr = st.text_area("Address", height=100)
+            a_day, a_mon = dm_inputs("Company Anniversary", "new_anniv")
+            ok = st.form_submit_button("Simpan Company", type="primary")
+        if ok:
+            try:
+                anniv = to_dm(a_day, a_mon)
+            except ValueError as e:
+                st.error(str(e))
+                st.stop()
+            if not sl.strip():
+                st.error("Shipping Line wajib diisi.")
+            elif sl.strip().lower() in [c["shipping_line"].lower() for c in companies]:
+                st.error("Shipping Line itu sudah ada.")
+            else:
+                sb.table("companies").insert(
+                    {"shipping_line": sl.strip(), "address": addr.strip() or None, "anniversary": anniv}
+                ).execute()
+                st.success("Company tersimpan. Lanjut tambah kontak lewat menu 'Tambah Kontak'.")
+                st.rerun()
+
+    # ---- Tambah Kontak ----
+    elif page == "Tambah Kontak":
+        if not companies:
+            st.info("Tambah company dulu.")
+        else:
+            with st.form("form_contact", clear_on_submit=True):
+                cid = st.selectbox(
+                    "Shipping Line", [c["id"] for c in companies], format_func=lambda i: co_by_id[i]["shipping_line"]
+                )
+                name = st.text_input("Name")
+                b_day, b_mon = dm_inputs("Birth Date", "new_birth")
+                pos = st.text_input("Position")
+                email = st.text_input("Email")
+                ok = st.form_submit_button("Simpan Kontak", type="primary")
+            if ok:
+                try:
+                    birth = to_dm(b_day, b_mon)
+                except ValueError as e:
+                    st.error(str(e))
+                    st.stop()
+                if not name.strip():
+                    st.error("Name wajib diisi.")
+                elif email.strip() and "@" not in email:
+                    st.error("Format email tidak valid.")
+                else:
+                    sb.table("contacts").insert(
+                        {
+                            "company_id": int(cid),
+                            "name": name.strip(),
+                            "birth_date": birth,
+                            "position": pos.strip() or None,
+                            "email": email.strip() or None,
+                        }
+                    ).execute()
+                    st.success("Kontak tersimpan.")
+                    st.rerun()
+
+    # ---- Edit / Hapus ----
+    else:
+        if not companies:
+            st.info("Belum ada data.")
+        else:
+            kind = st.radio("Yang diedit", ["Company", "Kontak"], horizontal=True, key="co_edit_kind")
+
+            if kind == "Company":
+                cid = st.selectbox(
+                    "Pilih company", [c["id"] for c in companies], format_func=lambda i: co_by_id[i]["shipping_line"]
+                )
+                c = co_by_id[cid]
+                with st.form("form_edit_company"):
+                    e_sl = st.text_input("Shipping Line", value=c["shipping_line"], key=f"ec_sl_{cid}")
+                    e_addr = st.text_area("Address", value=c.get("address") or "", key=f"ec_addr_{cid}")
+                    e_day, e_mon = dm_inputs("Company Anniversary", f"ec_an_{cid}", c.get("anniversary"))
+                    b1, b2 = st.columns(2)
+                    save = b1.form_submit_button("Update", type="primary")
+                    remove = b2.form_submit_button("Hapus company")
+                st.caption("Menghapus company juga menghapus semua kontak di dalamnya.")
+                if save:
+                    try:
+                        anniv = to_dm(e_day, e_mon)
+                    except ValueError as e:
+                        st.error(str(e))
+                        st.stop()
+                    others = [x["shipping_line"].lower() for x in companies if x["id"] != cid]
+                    if not e_sl.strip():
+                        st.error("Shipping Line wajib diisi.")
+                    elif e_sl.strip().lower() in others:
+                        st.error("Shipping Line itu sudah ada.")
+                    else:
+                        sb.table("companies").update(
+                            {"shipping_line": e_sl.strip(), "address": e_addr.strip() or None, "anniversary": anniv}
+                        ).eq("id", int(cid)).execute()
+                        st.success("Diupdate.")
+                        st.rerun()
+                if remove:
+                    sb.table("companies").delete().eq("id", int(cid)).execute()
+                    st.warning("Company dan kontaknya dihapus.")
+                    st.rerun()
+
+            else:
+                if not contacts:
+                    st.info("Belum ada kontak.")
+                else:
+                    labels = {
+                        p["id"]: f"{co_by_id.get(p['company_id'], {}).get('shipping_line', '-')} | {p['name']}"
+                        for p in contacts
+                    }
+                    pid = st.selectbox("Pilih kontak", list(labels.keys()), format_func=lambda i: labels[i])
+                    p = next(x for x in contacts if x["id"] == pid)
+                    co_ids = [c["id"] for c in companies]
+                    with st.form("form_edit_contact"):
+                        e_cid = st.selectbox(
+                            "Shipping Line",
+                            co_ids,
+                            index=co_ids.index(p["company_id"]),
+                            format_func=lambda i: co_by_id[i]["shipping_line"],
+                            key=f"ep_co_{pid}",
+                        )
+                        e_name = st.text_input("Name", value=p["name"], key=f"ep_name_{pid}")
+                        e_day, e_mon = dm_inputs("Birth Date", f"ep_bd_{pid}", p.get("birth_date"))
+                        e_pos = st.text_input("Position", value=p.get("position") or "", key=f"ep_pos_{pid}")
+                        e_email = st.text_input("Email", value=p.get("email") or "", key=f"ep_email_{pid}")
+                        b1, b2 = st.columns(2)
+                        save = b1.form_submit_button("Update", type="primary")
+                        remove = b2.form_submit_button("Hapus kontak")
+                    if save:
+                        try:
+                            birth = to_dm(e_day, e_mon)
+                        except ValueError as e:
+                            st.error(str(e))
+                            st.stop()
+                        if not e_name.strip():
+                            st.error("Name wajib diisi.")
+                        elif e_email.strip() and "@" not in e_email:
+                            st.error("Format email tidak valid.")
+                        else:
+                            sb.table("contacts").update(
+                                {
+                                    "company_id": int(e_cid),
+                                    "name": e_name.strip(),
+                                    "birth_date": birth,
+                                    "position": e_pos.strip() or None,
+                                    "email": e_email.strip() or None,
+                                }
+                            ).eq("id", int(pid)).execute()
+                            st.success("Diupdate.")
+                            st.rerun()
+                    if remove:
+                        sb.table("contacts").delete().eq("id", int(pid)).execute()
+                        st.warning("Kontak dihapus.")
+                        st.rerun()
