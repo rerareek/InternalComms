@@ -169,13 +169,25 @@ def dashboard(data):
     matrix = annual_service_matrix(base[base.service_name.isin(chosen_services) &
                                         base.ship_line.isin(chosen_lines)], year)
     if not matrix.empty:
-        def highlight_totals(row):
-            service = str(row.name[0]).strip().upper()
-            is_total = service.endswith(' TOTAL') or service == 'GRAND TOTAL'
-            return ['font-weight: bold' if is_total else '' for _ in row]
+        def is_total_row(label):
+            name = str(label[0]).strip().upper()
+            return name.endswith(' TOTAL') or name == 'GRAND TOTAL'
 
-        st.dataframe(matrix.style.format('{:,.0f}').apply(highlight_totals, axis=1),
-                     use_container_width=True, height=520)
+        def highlight_totals(row):
+            # Highlight the complete subtotal row, including every metric cell.
+            css = 'font-weight: 700; background-color: #EAF4F7;' if is_total_row(row.name) else ''
+            return [css] * len(row)
+
+        def highlight_total_index(index):
+            # Style the Service Name and Ship Line index cells as well.
+            return ['font-weight: 700; background-color: #EAF4F7;' if is_total_row(label) else ''
+                    for label in index]
+
+        styled_matrix = (matrix.style
+                         .format('{:,.0f}')
+                         .apply(highlight_totals, axis=1)
+                         .apply_index(highlight_total_index, axis=0, level=None))
+        st.dataframe(styled_matrix, use_container_width=True, height=520)
         export = matrix.copy()
         export.index = pd.MultiIndex.from_tuples(export.index, names=['Service Name', 'Ship Line'])
         st.download_button('Download Full Year Detail (CSV)',
