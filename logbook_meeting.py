@@ -4,6 +4,7 @@ from datetime import date
 
 import altair as alt
 import pandas as pd
+from throughput_budget import render as render_budget
 import streamlit as st
 from supabase import Client, create_client
 
@@ -268,7 +269,8 @@ st.title("CRM UPDATE")
 MENU_LOG = "📒 Log Book Meeting"
 MENU_COMPANY = "🏢 Company Details"
 MENU_TP = "🚢 Tanjung Priok Throughput"
-menu = st.sidebar.radio("Menu", [MENU_LOG, MENU_COMPANY, MENU_TP])
+MENU_BUDGET = "📊 Throughput vs Budget 25/26"
+menu = st.sidebar.radio("Menu", [MENU_LOG, MENU_COMPANY, MENU_TP, MENU_BUDGET])
 
 # ===== Page: Log Book Meeting =====
 if menu == MENU_LOG:
@@ -773,3 +775,7 @@ elif menu == MENU_TP:
             st.session_state["tp_ver"] = ver + 1
             st.session_state["tp_flash"] = f"Tersimpan: {len(up)} diisi/diupdate, {len(dels)} dihapus."
             st.rerun()
+
+# ===== Page: Throughput vs Budget 25/26 =====
+elif menu == MENU_BUDGET:
+    render_budget(sb)
