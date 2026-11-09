@@ -162,6 +162,55 @@ def dashboard(data):
     monthly.index.name = 'Month'
     st.dataframe(monthly.rename(columns={'calls':'Call','local_volume':'Local','ts_volume':'TS','total':'Total'}),
                  use_container_width=True)
+    st.subheader('Throughput Per Service — Full Year Detail')
+    st.caption('Format seperti Excel: Service Name → Ship Line, Jan–Dec (Call / Local / TS / Total), subtotal per service, dan Grand Total. Geser tabel ke kanan untuk melihat bulan berikutnya.')
+    matrix = annual_service_matrix(base[base.service_name.isin(chosen_services) &
+                                        base.ship_line.isin(chosen_lines)], year)
+    if not matrix.empty:
+        st.dataframe(matrix.style.format('{:,.0f}'), use_container_width=True, height=520)
+        export = matrix.copy()
+        export.index = pd.MultiIndex.from_tuples(export.index, names=['Service Name', 'Ship Line'])
+        st.download_button('Download Full Year Detail (CSV)',
+                           export.to_csv().encode('utf-8-sig'),
+                           f'throughput_service_detail_{year}.csv', 'text/csv',
+                           key='svc_detail_export')
+
+
+
+def annual_service_matrix(data, year):
+    """Excel-style Jan-Dec + Full Year matrix with dynamic service/line groups."""
+    base = data[data.year == year].copy()
+    if base.empty:
+        return pd.DataFrame()
+    fields = [('Call', 'calls'), ('Local', 'local_volume'),
+              ('TS', 'ts_volume'), ('Total', 'total')]
+    periods = MONTHS + ['Full Year']
+    columns = pd.MultiIndex.from_tuples(
+        [(period, label) for period in periods for label, _ in fields],
+        names=['Period', 'Metric'])
+    records = []
+    labels = []
+
+    def make_values(part):
+        values = []
+        for month_number in range(1, 13):
+            sub = part[part.month == month_number]
+            values.extend(int(sub[field].sum()) for _, field in fields)
+        values.extend(int(part[field].sum()) for _, field in fields)
+        return values
+
+    for service in sorted(base.service_name.dropna().unique()):
+        service_rows = base[base.service_name == service]
+        for line in sorted(service_rows.ship_line.dropna().unique()):
+            records.append(make_values(service_rows[service_rows.ship_line == line]))
+            labels.append((service, line))
+        records.append(make_values(service_rows))
+        labels.append((f'{service} Total', ''))
+    records.append(make_values(base))
+    labels.append(('GRAND TOTAL', ''))
+    result = pd.DataFrame(records, index=pd.MultiIndex.from_tuples(
+        labels, names=['Service Name', 'Ship Line']), columns=columns)
+    return result
 
 
 def manual_input(sb, data):
