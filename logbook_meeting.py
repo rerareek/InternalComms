@@ -218,13 +218,34 @@ def pie_chart(s):
         theta=alt.Theta("Throughput:Q", stack=True),
         order=alt.Order("idx:Q"),
         color=alt.Color("Terminal:N", scale=alt.Scale(domain=TERMINALS, range=TERM_COLORS),
-                        legend=alt.Legend(orient="bottom", title=None)),
+                        legend=None),
     )
     arcs = base.mark_arc(outerRadius=100).encode(
         tooltip=["Terminal", alt.Tooltip("Throughput:Q", format=","), alt.Tooltip("MS:Q", format=".1f", title="MS (%)")]
     )
     text = base.mark_text(radius=70, size=11, color="white", fontWeight="bold").encode(text="Label:N")
-    return (arcs + text).properties(height=260)
+    return (arcs + text).properties(height=240)
+
+
+def stats_box(s):
+    """Kotak kecil: throughput + MS per terminal, di samping pie."""
+    total = s.sum()
+    td = "padding:2px 6px;text-align:right"
+    rows = "".join(
+        f"<tr><td style='padding:2px 6px'><span style='color:{c}'>●</span> {t}</td>"
+        f"<td style='{td}'>{v:,.0f}</td><td style='{td}'>{v / total * 100:.1f}%</td></tr>"
+        for t, v, c in zip(s.index, s.values, TERM_COLORS)
+    )
+    rows += (f"<tr style='font-weight:bold;border-top:1px solid rgba(128,128,128,.4)'>"
+             f"<td style='padding:2px 6px'>TOTAL</td><td style='{td}'>{total:,.0f}</td><td style='{td}'>100%</td></tr>")
+    return (
+        "<div style='border:1px solid rgba(128,128,128,.35);border-radius:8px;padding:8px 6px'>"
+        "<table style='width:100%;font-size:0.85rem;border-collapse:collapse'>"
+        "<tr style='opacity:.7'><th style='padding:2px 6px;text-align:left'>Terminal</th>"
+        "<th style='padding:2px 6px;text-align:right'>Throughput</th>"
+        "<th style='padding:2px 6px;text-align:right'>MS</th></tr>"
+        f"{rows}</table></div>"
+    )
 
 
 def growth_chart(g):
@@ -675,9 +696,11 @@ elif menu == MENU_TP:
                     if s.sum() == 0:
                         st.info("Belum ada data.")
                     else:
-                        st.altair_chart(pie_chart(s))
-                        warn = f" · ⚠️ baru {n} dari {b - a + 1} bulan terisi" if n < b - a + 1 else ""
-                        st.caption(f"Total: {s.sum():,.0f}{warn}")
+                        pc, bc = st.columns([1, 1], vertical_alignment="center")
+                        pc.altair_chart(pie_chart(s))
+                        bc.markdown(stats_box(s), unsafe_allow_html=True)
+                        if n < b - a + 1:
+                            st.caption(f"⚠️ Baru {n} dari {b - a + 1} bulan terisi")
 
         t0, t1 = periods[0][0], periods[1][0]
         cur, prev = data[0][0], data[1][0]
@@ -688,9 +711,9 @@ elif menu == MENU_TP:
             ms_c = c / cur.sum() * 100 if cur.sum() > 0 else None
             ms_p = p / prev.sum() * 100 if prev.sum() > 0 else None
             rows.append({
-                "Terminal": t, f"Throughput {t0}": c, f"Throughput {t1}": p,
+                "Terminal": t, f"Throughput {t1}": p, f"Throughput {t0}": c,
                 "Growth (%)": (c - p) / p * 100 if p > 0 else None,
-                f"MS {t0} (%)": ms_c, f"MS {t1} (%)": ms_p,
+                f"MS {t1} (%)": ms_p, f"MS {t0} (%)": ms_c,
                 "Δ MS (pp)": ms_c - ms_p if ms_c is not None and ms_p is not None else None,
             })
         comp = pd.DataFrame(rows)
