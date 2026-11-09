@@ -5,7 +5,7 @@ import streamlit as st
 
 MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 SERIES = ['2025 (Actual)', 'Budget 2026', '2026 (Forecast)']
-COLORS = {'2025 (Actual)':'#C61B31','Budget 2026':'#AFD1C2','2026 (Forecast)':'#ADC4BC'}
+COLORS = {'2025 (Actual)':'#688ae8','Budget 2026':'#c33d69','2026 (Forecast)':'#2ea597'}
 def load_data(sb):
     try:
         records = sb.table('throughput_budget_2526').select('series,month,value').execute().data or []
