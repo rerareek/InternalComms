@@ -169,25 +169,21 @@ def dashboard(data):
     matrix = annual_service_matrix(base[base.service_name.isin(chosen_services) &
                                         base.ship_line.isin(chosen_lines)], year)
     if not matrix.empty:
-        def is_total_row(label):
-            name = str(label[0]).strip().upper()
-            return name.endswith(' TOTAL') or name == 'GRAND TOTAL'
+        # Turn the index labels into real columns so Styler can highlight
+        # every cell of a subtotal row (including Service Name / Ship Line).
+        display_matrix = matrix.reset_index()
 
         def highlight_totals(row):
-            # Highlight the complete subtotal row, including every metric cell.
-            css = 'font-weight: 700; background-color: #EAF4F7;' if is_total_row(row.name) else ''
+            service = str(row[('Service Name', '')]).strip().upper()
+            is_total = service.endswith(' TOTAL') or service == 'GRAND TOTAL'
+            css = 'font-weight: bold; background-color: #EAF4F7;' if is_total else ''
             return [css] * len(row)
 
-        def highlight_total_index(index):
-            # Style the Service Name and Ship Line index cells as well.
-            return ['font-weight: 700; background-color: #EAF4F7;' if is_total_row(label) else ''
-                    for label in index]
-
-        styled_matrix = (matrix.style
-                         .format('{:,.0f}')
-                         .apply(highlight_totals, axis=1)
-                         .apply_index(highlight_total_index, axis=0, level=None))
-        st.dataframe(styled_matrix, use_container_width=True, height=520)
+        styled_matrix = (display_matrix.style
+                         .format('{:,.0f}', subset=display_matrix.columns[2:])
+                         .apply(highlight_totals, axis=1))
+        st.dataframe(styled_matrix, use_container_width=True, height=520,
+                     hide_index=True)
         export = matrix.copy()
         export.index = pd.MultiIndex.from_tuples(export.index, names=['Service Name', 'Ship Line'])
         st.download_button('Download Full Year Detail (CSV)',
