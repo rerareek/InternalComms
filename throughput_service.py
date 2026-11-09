@@ -124,9 +124,19 @@ def dashboard(data):
     period = c2.selectbox('Period', MONTHS + ['Full Year'], key='svc_dash_period')
     base = data[data.year == year]
     services = sorted(base.service_name.unique().tolist())
-    chosen_services = c3.multiselect('Service', services, default=services, key='svc_dash_services')
+    # Reconcile saved widget selections with newly inserted services.
+    # When the dashboard was first opened with no data, Streamlit can retain [].
+    old_services = st.session_state.get('svc_dash_services')
+    if old_services is None or not old_services or set(services) != set(st.session_state.get('svc_dash_service_options', [])):
+        st.session_state['svc_dash_services'] = services.copy()
+    st.session_state['svc_dash_service_options'] = services.copy()
+    chosen_services = c3.multiselect('Service', services, key='svc_dash_services')
     lines = sorted(base.loc[base.service_name.isin(chosen_services), 'ship_line'].unique().tolist())
-    chosen_lines = c4.multiselect('Ship Line', lines, default=lines, key='svc_dash_lines')
+    old_lines = st.session_state.get('svc_dash_lines')
+    if old_lines is None or not old_lines or set(lines) != set(st.session_state.get('svc_dash_line_options', [])):
+        st.session_state['svc_dash_lines'] = lines.copy()
+    st.session_state['svc_dash_line_options'] = lines.copy()
+    chosen_lines = c4.multiselect('Ship Line', lines, key='svc_dash_lines')
     filtered = base[base.service_name.isin(chosen_services) & base.ship_line.isin(chosen_lines)]
     if period != 'Full Year':
         filtered = filtered[filtered.month == MONTHS.index(period) + 1]
@@ -325,7 +335,7 @@ def bulk_input(sb):
                  disabled=bool(errors) or not records, key='svc_bulk_save'):
         try:
             save_batch(sb, records)
-            st.success(f'{len(records)} record berhasil disimpan / diperbarui.')
+            st.session_state['svc_saved_message'] = f'{len(records)} record berhasil disimpan / diperbarui. Buka tab Dashboard untuk melihat hasilnya.'
             st.rerun()
         except Exception as exc:
             st.error(f'Gagal menyimpan: {exc}')
@@ -334,6 +344,8 @@ def bulk_input(sb):
 def render(sb):
     st.header('Throughput Per Service')
     st.caption('Call, Local, TS & Total · per service dan shipping line')
+    if st.session_state.pop('svc_saved_message', None):
+        st.success('Data Copy–Paste berhasil disimpan ke Supabase. Cek Dashboard (Year, Period, Service, Ship Line).')
     tab_dashboard, tab_input = st.tabs(['📊 Dashboard', '✏️ Input Data'])
     with tab_dashboard:
         dashboard(load(sb))
