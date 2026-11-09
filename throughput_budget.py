@@ -61,7 +61,8 @@ def render(sb):
     st.caption('Percent changes are calculated from the current values. Total column uses the supplied total values, which differ by 1 TEU from monthly sums for Budget 2026 and Forecast 2026.')
     with st.expander('✏️ Input / Edit Data',expanded=False):
         st.caption('Edit monthly TEUs and the supplied Total. Save to Supabase to share updates with your team.')
-        editor = st.data_editor(totals_df, key='budget_editor',use_container_width=True,num_rows='fixed',column_config={m:st.column_config.NumberColumn(m,min_value=0,step=1,format='%d') for m in MONTHS+['Total']})
+        editor = st.data_editor(totals_df, key='budget_editor', use_container_width=True, num_rows='fixed', column_config={m:st.column_config.NumberColumn(m,min_value=0,step=1,format='%d') for m in MONTHS+['Total']})
+editor = editor.fillna(totals_df)
         if st.button('Save Throughput vs Budget',type='primary'):
             try:
                 records=[]
