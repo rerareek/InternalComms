@@ -270,7 +270,36 @@ MENU_LOG = "📒 Log Book Meeting"
 MENU_COMPANY = "🏢 Company Details"
 MENU_TP = "🚢 Tanjung Priok Throughput"
 MENU_BUDGET = "📊 Throughput vs Budget 25/26"
-menu = st.sidebar.radio("Menu", [MENU_LOG, MENU_COMPANY, MENU_TP, MENU_BUDGET])
+# Sidebar styling — navigation only, existing page logic unchanged.
+st.markdown("""<style>
+section[data-testid="stSidebar"] {background: linear-gradient(165deg,#101d32 0%,#182d46 65%,#183d49 100%);}
+section[data-testid="stSidebar"] * {color:#e9f1fa;}
+section[data-testid="stSidebar"] [data-testid="stRadio"] label {font-weight:500;}
+section[data-testid="stSidebar"] div[role="radiogroup"] {gap:9px;}
+section[data-testid="stSidebar"] div[role="radiogroup"] > label {
+  border:1px solid rgba(255,255,255,.10); border-radius:11px;
+  background:rgba(255,255,255,.045); padding:12px 10px;
+  transition:background .2s ease,border-color .2s ease;
+}
+section[data-testid="stSidebar"] div[role="radiogroup"] > label:hover {
+  background:rgba(59,130,246,.18); border-color:rgba(96,165,250,.45);
+}
+section[data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) {
+  background:rgba(20,184,166,.20); border-color:#2dd4bf;
+}
+section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {line-height:1.45;}
+</style>""", unsafe_allow_html=True)
+with st.sidebar:
+    st.markdown("""<div style="padding:18px 4px 8px">
+      <div style="font-size:11px;letter-spacing:2px;color:#5eead4;font-weight:700">INTERNAL WORKSPACE</div>
+      <div style="font-size:25px;font-weight:800;color:white;margin-top:6px">◈ CRM UPDATE</div>
+      <div style="font-size:12px;color:#a9bdd3;margin-top:4px">Marketing · Seaside Operations</div>
+    </div>""", unsafe_allow_html=True)
+    st.divider()
+    st.caption("WORKSPACE MENU")
+    menu = st.radio("Navigation", [MENU_LOG, MENU_COMPANY, MENU_TP, MENU_BUDGET], label_visibility="collapsed")
+    st.divider()
+    st.markdown('<div style="font-size:11px;color:#a9bdd3;padding:8px 4px">INTERNALCOMMS  ·  Dashboard</div>',unsafe_allow_html=True)
 
 # ===== Page: Log Book Meeting =====
 if menu == MENU_LOG:
