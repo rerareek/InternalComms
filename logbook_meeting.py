@@ -2,6 +2,7 @@ import calendar
 import hmac
 from datetime import date
 
+import altair as alt
 import pandas as pd
 import streamlit as st
 from supabase import Client, create_client
@@ -169,6 +170,75 @@ def dm_inputs(label_prefix, key, current=None):
     return day, mon
 
 
+# ---------- Tanjung Priok Throughput: helpers ----------
+TERMINALS = ["JICT", "TPK KOJA", "MAL", "TO3", "NPCT1"]
+MONTHS_ID = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus",
+             "September", "Oktober", "November", "Desember"]
+TERM_COLORS = ["#1f77b4", "#ff7f0e", "#17becf", "#9467bd", "#8c564b"]
+
+
+def load_tp(years):
+    rows = sb.table("throughput").select("year,month,terminal,value").in_("year", list(years)).execute().data
+    df = pd.DataFrame(rows, columns=["year", "month", "terminal", "value"])
+    return df.astype({"year": "int64", "month": "int64", "value": "float64"})
+
+
+def agg(df, year, m1, m2):
+    """Total per terminal untuk periode + jumlah bulan yang ada datanya."""
+    d = df[(df["year"] == year) & df["month"].between(m1, m2)]
+    return d.groupby("terminal")["value"].sum().reindex(TERMINALS).fillna(0), d["month"].nunique()
+
+
+def year_table(df, year):
+    p = pd.DataFrame(index=TERMINALS, columns=MONTHS_ID, dtype=float)
+    for r in df[df["year"] == year].itertuples():
+        if r.terminal in TERMINALS:
+            p.at[r.terminal, MONTHS_ID[r.month - 1]] = r.value
+    return p
+
+
+def with_totals(p):
+    t = p.copy()
+    t["TOTAL"] = t.sum(axis=1, min_count=1)
+    t.loc["TOTAL"] = t.sum(min_count=1)
+    t["MS"] = t["TOTAL"] / t.loc["TOTAL", "TOTAL"] * 100
+    return t
+
+
+def ms_table(t):
+    m = t.drop(columns=["MS"])
+    return m.div(m.loc["TOTAL"].where(m.loc["TOTAL"] > 0), axis=1) * 100
+
+
+def pie_chart(s):
+    df = pd.DataFrame({"Terminal": s.index, "Throughput": s.values, "idx": range(len(s))})
+    df["MS"] = df["Throughput"] / df["Throughput"].sum() * 100
+    df["Label"] = df["MS"].map(lambda v: f"{v:.1f}%")
+    base = alt.Chart(df).encode(
+        theta=alt.Theta("Throughput:Q", stack=True),
+        order=alt.Order("idx:Q"),
+        color=alt.Color("Terminal:N", scale=alt.Scale(domain=TERMINALS, range=TERM_COLORS),
+                        legend=alt.Legend(orient="bottom", title=None)),
+    )
+    arcs = base.mark_arc(outerRadius=100).encode(
+        tooltip=["Terminal", alt.Tooltip("Throughput:Q", format=","), alt.Tooltip("MS:Q", format=".1f", title="MS (%)")]
+    )
+    text = base.mark_text(radius=70, size=11, color="white", fontWeight="bold").encode(text="Label:N")
+    return (arcs + text).properties(height=260)
+
+
+def growth_chart(g):
+    base = alt.Chart(g).encode(x=alt.X("Terminal:N", sort=None, title=None),
+                               y=alt.Y("Growth:Q", title="Growth (%)"))
+    bars = base.mark_bar().encode(
+        color=alt.condition(alt.datum.Growth >= 0, alt.value("#2ca02c"), alt.value("#d62728")),
+        tooltip=["Terminal", alt.Tooltip("Growth:Q", format="+.1f")],
+    )
+    pos = base.transform_filter(alt.datum.Growth >= 0).mark_text(baseline="bottom", dy=-4).encode(text=alt.Text("Growth:Q", format="+.1f"))
+    neg = base.transform_filter(alt.datum.Growth < 0).mark_text(baseline="top", dy=4).encode(text=alt.Text("Growth:Q", format="+.1f"))
+    return (bars + pos + neg).properties(height=280)
+
+
 # ---------- UI ----------
 require_login()
 sb = get_client()
@@ -176,7 +246,8 @@ st.title("CRM UPDATE")
 
 MENU_LOG = "📒 Log Book Meeting"
 MENU_COMPANY = "🏢 Company Details"
-menu = st.sidebar.radio("Menu", [MENU_LOG, MENU_COMPANY])
+MENU_TP = "🚢 Tanjung Priok Throughput"
+menu = st.sidebar.radio("Menu", [MENU_LOG, MENU_COMPANY, MENU_TP])
 
 # ===== Page: Log Book Meeting =====
 if menu == MENU_LOG:
@@ -558,3 +629,124 @@ elif menu == MENU_COMPANY:
                         sb.table("contacts").delete().eq("id", int(pid)).execute()
                         st.warning("Kontak dihapus.")
                         st.rerun()
+
+# ===== Page: Tanjung Priok Throughput =====
+elif menu == MENU_TP:
+    st.header("Tanjung Priok Throughput")
+    st.caption("Throughput Terminal Petikemas APTPI. TOTAL dan Market Share dihitung otomatis dari data bulanan.")
+    tp_page = st.radio("Menu", ["Dashboard", "Tabel", "Input Data"], horizontal=True,
+                       key="tp_page", label_visibility="collapsed")
+    this_year = date.today().year
+    years = list(range(this_year, this_year - 8, -1))
+
+    # ---- Dashboard ----
+    if tp_page == "Dashboard":
+        c1, c2, c3 = st.columns(3)
+        mode = c1.radio("Periode", ["Per Tahun", "Per Bulan", "Year to Date"], index=2, key="tp_mode")
+        year = c2.selectbox("Tahun", years, key="tp_year")
+        df = load_tp([year, year - 1, year - 2])
+        have = df[df["year"] == year]["month"]
+        last = int(have.max()) if len(have) else 1
+        month = 12
+        if mode != "Per Tahun":
+            label = "Bulan" if mode == "Per Bulan" else "Sampai bulan"
+            month = MONTHS_ID.index(c3.selectbox(label, MONTHS_ID, index=last - 1, key=f"tp_month_{mode}_{year}")) + 1
+        M = MONTHS_ID[month - 1]
+
+        if mode == "Year to Date":
+            periods = [(f"YTD {M} {year}", year, 1, month), (f"YTD {M} {year - 1}", year - 1, 1, month),
+                       (f"Full Year {year - 1}", year - 1, 1, 12), (f"Full Year {year - 2}", year - 2, 1, 12)]
+        elif mode == "Per Bulan":
+            periods = [(f"{M} {year}", year, month, month), (f"{M} {year - 1}", year - 1, month, month),
+                       (f"Full Year {year - 1}", year - 1, 1, 12), (f"Full Year {year - 2}", year - 2, 1, 12)]
+        else:
+            periods = [(f"Full Year {year}", year, 1, 12), (f"Full Year {year - 1}", year - 1, 1, 12),
+                       (f"Full Year {year - 2}", year - 2, 1, 12)]
+        data = [agg(df, y, a, b) for _, y, a, b in periods]
+
+        for i in range(0, len(periods), 2):
+            for col, j in zip(st.columns(2), (i, i + 1)):
+                if j >= len(periods):
+                    break
+                title, _, a, b = periods[j]
+                s, n = data[j]
+                with col:
+                    st.markdown(f"**{title}**")
+                    if s.sum() == 0:
+                        st.info("Belum ada data.")
+                    else:
+                        st.altair_chart(pie_chart(s))
+                        warn = f" · ⚠️ baru {n} dari {b - a + 1} bulan terisi" if n < b - a + 1 else ""
+                        st.caption(f"Total: {s.sum():,.0f}{warn}")
+
+        t0, t1 = periods[0][0], periods[1][0]
+        cur, prev = data[0][0], data[1][0]
+        rows = []
+        for t in TERMINALS + ["TOTAL"]:
+            c = cur.sum() if t == "TOTAL" else cur[t]
+            p = prev.sum() if t == "TOTAL" else prev[t]
+            ms_c = c / cur.sum() * 100 if cur.sum() > 0 else None
+            ms_p = p / prev.sum() * 100 if prev.sum() > 0 else None
+            rows.append({
+                "Terminal": t, f"Throughput {t0}": c, f"Throughput {t1}": p,
+                "Growth (%)": (c - p) / p * 100 if p > 0 else None,
+                f"MS {t0} (%)": ms_c, f"MS {t1} (%)": ms_p,
+                "Δ MS (pp)": ms_c - ms_p if ms_c is not None and ms_p is not None else None,
+            })
+        comp = pd.DataFrame(rows)
+
+        st.markdown(f"**Growth: {t0} vs {t1}**")
+        g = comp[["Terminal", "Growth (%)"]].rename(columns={"Growth (%)": "Growth"}).dropna()
+        if g.empty:
+            st.info("Growth belum bisa dihitung (data periode pembanding kosong).")
+        else:
+            st.altair_chart(growth_chart(g))
+        st.markdown("**Perbandingan Throughput & Market Share**")
+        fmt = {f"Throughput {t0}": "{:,.0f}", f"Throughput {t1}": "{:,.0f}", "Growth (%)": "{:+.1f}",
+               f"MS {t0} (%)": "{:.1f}", f"MS {t1} (%)": "{:.1f}", "Δ MS (pp)": "{:+.1f}"}
+        st.dataframe(comp.style.format(fmt, na_rep="-"), hide_index=True, width="stretch")
+
+    # ---- Tabel ----
+    elif tp_page == "Tabel":
+        year = st.selectbox("Tahun", years, key="tp_tbl_year")
+        t = with_totals(year_table(load_tp([year]), year))
+        st.markdown("**Throughput**")
+        st.dataframe(t.style.format({**{m: "{:,.0f}" for m in MONTHS_ID + ["TOTAL"]}, "MS": "{:.1f}%"}, na_rep="-"),
+                     width="stretch")
+        st.markdown("**Market Share per bulan** (otomatis dari tabel di atas)")
+        st.dataframe(ms_table(t).style.format("{:.1f}%", na_rep="-"), width="stretch")
+        st.download_button("⬇️ Download CSV (throughput)", t.to_csv().encode("utf-8"),
+                           file_name=f"throughput_{year}.csv", mime="text/csv")
+
+    # ---- Input Data ----
+    else:
+        year = st.selectbox("Tahun", years, key="tp_in_year")
+        if msg := st.session_state.pop("tp_flash", None):
+            st.success(msg)
+        ver = st.session_state.get("tp_ver", 0)
+        orig = year_table(load_tp([year]), year)
+        st.caption("Isi throughput per terminal per bulan. Kosongkan sel untuk menghapus data.")
+        edited = st.data_editor(
+            orig, key=f"tp_ed_{year}_{ver}", width="stretch",
+            column_config={m: st.column_config.NumberColumn(min_value=0, step=1, format="%d") for m in MONTHS_ID},
+        )
+        if st.button("Simpan", type="primary"):
+            up, dels = [], []
+            for t in TERMINALS:
+                for i, m in enumerate(MONTHS_ID, 1):
+                    new, old = edited.at[t, m], orig.at[t, m]
+                    if pd.isna(new) and pd.isna(old):
+                        continue
+                    if not pd.isna(new) and not pd.isna(old) and new == old:
+                        continue
+                    if pd.isna(new):
+                        dels.append((t, i))
+                    else:
+                        up.append({"year": year, "month": i, "terminal": t, "value": int(new)})
+            if up:
+                sb.table("throughput").upsert(up, on_conflict="year,month,terminal").execute()
+            for t, i in dels:
+                sb.table("throughput").delete().eq("year", year).eq("month", i).eq("terminal", t).execute()
+            st.session_state["tp_ver"] = ver + 1
+            st.session_state["tp_flash"] = f"Tersimpan: {len(up)} diisi/diupdate, {len(dels)} dihapus."
+            st.rerun()
