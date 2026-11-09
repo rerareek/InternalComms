@@ -7,7 +7,7 @@ import streamlit as st
 
 MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 TABLE = 'throughput_per_service'
-PASTE_COLS = ['No', 'Service Name', 'Ship Line', 'Call', 'Local', 'TS', 'Total']
+PASTE_COLS = ['No', 'Service Name', 'Ship Line', 'Call', 'Local', 'TS']
 
 
 def load(sb):
@@ -47,7 +47,7 @@ def parse_number(value):
 
 
 def normalize_paste(frame, year, month):
-    """Supports Excel A:G (No included) or B:G (without No), and blank service cells."""
+    """Supports six or five columns (No optional), and blank service cells."""
     records, issues, notes = [], [], []
     current_service = ''
     seen = set()
@@ -71,14 +71,6 @@ def normalize_paste(frame, year, month):
             calls = parse_number(row.get('Call'))
             local = parse_number(row.get('Local'))
             ts = parse_number(row.get('TS'))
-            raw_total = row.get('Total')
-            if pd.notna(raw_total) and str(raw_total).strip() not in ('', '-', '–', '—'):
-                try:
-                    supplied_total = parse_number(raw_total)
-                    if supplied_total != local + ts:
-                        notes.append(f'Baris {i} ({current_service} / {line}): Total Excel {supplied_total:,} berbeda dengan Local + TS {local + ts:,}; Total otomatis dihitung ulang.')
-                except ValueError:
-                    notes.append(f'Baris {i}: Total Excel tidak valid; dihitung ulang dari Local + TS.')
             key = (current_service, line.upper())
             if key in seen:
                 issues.append(f'Baris {i}: Duplikat service + ship line: {key[0]} / {key[1]}.')
@@ -98,11 +90,11 @@ def parse_clipboard(raw):
         return pd.DataFrame(columns=PASTE_COLS)
     lines = [line.split('\t') for line in raw.splitlines() if line.strip()]
     width = max(len(x) for x in lines)
-    if width not in (6, 7):
-        raise ValueError('Copy kolom No sampai Total (7 kolom) atau Service Name sampai Total (6 kolom) untuk satu bulan saja.')
+    if width not in (5, 6):
+        raise ValueError('Copy kolom No sampai TS (6 kolom), atau Service Name sampai TS (5 kolom), untuk satu bulan saja. Jangan sertakan kolom Total.')
     rows = [r + [''] * (width - len(r)) for r in lines]
-    df = pd.DataFrame(rows, columns=PASTE_COLS if width == 7 else PASTE_COLS[1:])
-    if width == 6:
+    df = pd.DataFrame(rows, columns=PASTE_COLS if width == 6 else PASTE_COLS[1:])
+    if width == 5:
         df.insert(0, 'No', '')
     return df
 
@@ -177,7 +169,13 @@ def dashboard(data):
     matrix = annual_service_matrix(base[base.service_name.isin(chosen_services) &
                                         base.ship_line.isin(chosen_lines)], year)
     if not matrix.empty:
-        st.dataframe(matrix.style.format('{:,.0f}'), use_container_width=True, height=520)
+        def highlight_totals(row):
+            service = str(row.name[0]).strip().upper()
+            is_total = service.endswith(' TOTAL') or service == 'GRAND TOTAL'
+            return ['font-weight: bold' if is_total else '' for _ in row]
+
+        st.dataframe(matrix.style.format('{:,.0f}').apply(highlight_totals, axis=1),
+                     use_container_width=True, height=520)
         export = matrix.copy()
         export.index = pd.MultiIndex.from_tuples(export.index, names=['Service Name', 'Ship Line'])
         st.download_button('Download Full Year Detail (CSV)',
@@ -284,18 +282,10 @@ def manual_input(sb, data):
 
 
 def bulk_input(sb):
-    st.caption('Copy dari Excel untuk SATU bulan: kolom No, Service Name, Ship Line, Call, Local, TS, Total. Bisa juga tanpa kolom No.')
+    st.caption('Copy data dari Excel untuk satu bulan: No (opsional), Service Name, Ship Line, Call, Local, TS. Kolom Total tidak perlu disertakan karena dihitung otomatis.')
     a,b = st.columns(2)
     year = a.number_input('Year', min_value=2020, max_value=2100, value=2026, step=1, key='svc_bulk_year')
     month_name = b.selectbox('Month', MONTHS, key='svc_bulk_month')
-    st.markdown('**Contoh Januari — CIN1**')
-    example = pd.DataFrame([
-        ['1','CIN1','CMA GROUP','2','14,964','362','15,326'],
-        ['','','COSCO','1','4,756','80','4,836'],
-        ['','','OOCL','2','3,117','802','3,919'],
-        ['','CIN1 Total','','5','25,338','1,308','26,646'],
-    ], columns=PASTE_COLS)
-    st.dataframe(example, hide_index=True, use_container_width=True)
     mode = st.radio('Cara paste', ['Paste ke tabel', 'Paste langsung dari Excel (Ctrl+V)'], horizontal=True,
                     key='svc_bulk_mode')
     if mode == 'Paste ke tabel':
@@ -305,7 +295,7 @@ def bulk_input(sb):
                                key='svc_bulk_editor', column_config={col:st.column_config.TextColumn(col) for col in PASTE_COLS})
     else:
         raw = st.text_area('Paste sel Excel di sini (Ctrl+V)', height=180, key='svc_bulk_raw',
-                           placeholder='1\tCIN1\tCMA GROUP\t2\t14,964\t362\t15,326')
+                           placeholder='1\tCIN1\tCMA GROUP\t2\t14,964\t362')
         try:
             frame = parse_clipboard(raw)
         except ValueError as exc:
@@ -318,10 +308,6 @@ def bulk_input(sb):
             st.write('•', message)
         if len(errors) > 15:
             st.caption(f'Dan {len(errors)-15} masalah lainnya.')
-    if warnings:
-        with st.expander(f'⚠️ {len(warnings)} perbedaan Total Excel vs Local + TS'):
-            for message in warnings[:30]:
-                st.write('•', message)
     if records:
         preview = pd.DataFrame(records).rename(columns={'service_name':'Service Name','ship_line':'Ship Line',
                                                           'calls':'Call','local_volume':'Local','ts_volume':'TS'})
@@ -350,7 +336,7 @@ def render(sb):
     with tab_dashboard:
         dashboard(load(sb))
     with tab_input:
-        manual, bulk = st.tabs(['Manual Input', 'Copy–Paste Excel'])
+        manual, bulk = st.tabs(['Manual Input', 'Bulk Data Entry'])
         with manual:
             manual_input(sb, load(sb))
         with bulk:
