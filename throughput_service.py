@@ -289,47 +289,136 @@ def manual_input(sb, data):
                 st.error(str(exc))
 
 
+WIDE_COLS = ['Service Name', 'Ship Line'] + [f'{month} {metric}' for month in MONTHS for metric in ('Call', 'Local', 'TS')]
+
+
+def parse_wide_clipboard(raw):
+    """Accept Excel's 38-column grid, including its two merged-header rows."""
+    if not raw.strip():
+        return pd.DataFrame(columns=WIDE_COLS)
+    lines = [line.split('\t') for line in raw.splitlines() if line.strip()]
+    # Header rows can contain merged month names and blank cells.
+    while lines and (str(lines[0][0]).strip().upper() in ('SERVICE NAME', 'SERVICE') or
+                     (len(lines[0]) > 2 and str(lines[0][2]).strip().upper() == 'CALL')):
+        lines.pop(0)
+    if not lines:
+        return pd.DataFrame(columns=WIDE_COLS)
+    width = max(len(line) for line in lines)
+    if width > len(WIDE_COLS):
+        # Excel sometimes appends trailing empty columns to the copied range.
+        if any(any(str(v).strip() for v in line[len(WIDE_COLS):]) for line in lines):
+            raise ValueError(f'Format memiliki {width} kolom. Gunakan Service Name, Ship Line, lalu Jan–Dec (Call, Local, TS) tanpa Total.')
+        lines = [line[:len(WIDE_COLS)] for line in lines]
+    if width < 5:
+        raise ValueError('Minimal copy kolom Service Name, Ship Line, Jan Call, Jan Local, Jan TS.')
+    return pd.DataFrame([line[:len(WIDE_COLS)] + [''] * max(0, len(WIDE_COLS)-len(line))
+                         for line in lines], columns=WIDE_COLS)
+
+
+def normalize_wide(frame, year):
+    """Convert the 38-column spreadsheet into monthly Supabase records."""
+    records, errors, warnings = [], [], []
+    current_service = ''
+    seen = set()
+    rounded = []
+    for i, (_, row) in enumerate(frame.iterrows(), 1):
+        service = str(row.get('Service Name', '') or '').strip()
+        line = str(row.get('Ship Line', '') or '').strip()
+        if service.lower() in ('nan', 'none'):
+            service = ''
+        if line.lower() in ('nan', 'none'):
+            line = ''
+        if service.upper() in ('SERVICE NAME', 'SERVICE'):
+            continue
+        if service.upper() == 'GRAND TOTAL' or service.upper().endswith(' TOTAL'):
+            continue
+        if service:
+            current_service = service.upper()
+        if not line or line.upper() in ('SHIP LINE', 'TOTAL'):
+            continue
+        if not current_service:
+            errors.append(f'Baris {i}: Service Name kosong dan tidak ada service sebelumnya.')
+            continue
+        for m, month in enumerate(MONTHS, 1):
+            values = [row.get(f'{month} {metric}', '') for metric in ('Call','Local','TS')]
+            if all(pd.isna(v) or str(v).strip() in ('', '-', '–', '—') for v in values):
+                continue
+            try:
+                nums = []
+                for metric, val in zip(('Call','Local','TS'), values):
+                    raw = str(val).strip().replace(',', '').replace(' ', '')
+                    if not raw or raw in ('-', '–', '—'):
+                        nums.append(0)
+                        continue
+                    if raw.startswith('(') and raw.endswith(')'):
+                        raw = '-' + raw[1:-1]
+                    num = float(raw)
+                    if not (num >= 0 and num < float('inf')):
+                        raise ValueError(f'{metric} harus angka positif')
+                    if metric == 'Call' and not num.is_integer():
+                        raise ValueError('Call harus bilangan bulat')
+                    if not num.is_integer():
+                        rounded.append(f'{current_service}/{line} {month} {metric}: {num:g}')
+                    nums.append(int(num + 0.5))
+                key = (int(year), m, current_service, line.upper())
+                if key in seen:
+                    errors.append(f'Baris {i}: duplikat {current_service} / {line} / {month}.')
+                    continue
+                seen.add(key)
+                records.append(dict(year=int(year), month=m, service_name=current_service,
+                                    ship_line=line.upper(), calls=nums[0],
+                                    local_volume=nums[1], ts_volume=nums[2]))
+            except (ValueError, TypeError, OverflowError) as exc:
+                errors.append(f'Baris {i} ({current_service}/{line}, {month}): {exc}')
+    if rounded:
+        warnings.append(f'{len(rounded)} nilai Local/TS memiliki desimal dan dibulatkan ke bilangan bulat terdekat, karena kolom Supabase saat ini bertipe BIGINT. Contoh: ' + '; '.join(rounded[:3]))
+    return records, errors, warnings
+
+
 def bulk_input(sb):
-    st.caption('Copy data dari Excel untuk satu bulan: No (opsional), Service Name, Ship Line, Call, Local, TS. Kolom Total tidak perlu disertakan karena dihitung otomatis.')
-    a,b = st.columns(2)
-    year = a.number_input('Year', min_value=2020, max_value=2100, value=2026, step=1, key='svc_bulk_year')
-    month_name = b.selectbox('Month', MONTHS, key='svc_bulk_month')
-    mode = st.radio('Cara paste', ['Paste ke tabel', 'Paste langsung dari Excel (Ctrl+V)'], horizontal=True,
-                    key='svc_bulk_mode')
-    if mode == 'Paste ke tabel':
-        st.caption('Klik sel pertama tabel → Ctrl+V dari Excel. Baris baru bisa ditambah otomatis. Kalau paste Excel tidak cocok, pilih mode paste langsung.')
-        empty = pd.DataFrame([{col:'' for col in PASTE_COLS} for _ in range(4)])
-        frame = st.data_editor(empty, num_rows='dynamic', hide_index=True, use_container_width=True,
-                               key='svc_bulk_editor', column_config={col:st.column_config.TextColumn(col) for col in PASTE_COLS})
-    else:
-        raw = st.text_area('Paste sel Excel di sini (Ctrl+V)', height=180, key='svc_bulk_raw',
-                           placeholder='1\tCIN1\tCMA GROUP\t2\t14,964\t362')
+    st.caption('Format sesuai template CRM: Service Name | Ship Line | January–December, masing-masing Call, Local, TS. Total dihitung otomatis.')
+    year = st.number_input('Year', min_value=2020, max_value=2100, value=2026,
+                           step=1, key='svc_bulk_year')
+    st.info('Copy dari Excel mulai kolom **Service Name** sampai **Dec TS** (38 kolom). Bisa sekaligus satu tahun penuh atau hanya beberapa bulan. Jangan sertakan kolom Total.')
+    mode = st.radio('Metode input', ['Paste dari Excel', 'Edit langsung di tabel'],
+                    horizontal=True, key='svc_bulk_mode')
+    if mode == 'Paste dari Excel':
+        raw = st.text_area('Paste data Excel di sini (Ctrl+V)', height=200,
+                           key='svc_bulk_wide_raw',
+                           placeholder='CIN1\tCMA GROUP\t2\t14964\t362\t2\t10862\t300')
         try:
-            frame = parse_clipboard(raw)
+            frame = parse_wide_clipboard(raw)
         except ValueError as exc:
             st.error(str(exc))
             return
-    records, errors, warnings = normalize_paste(frame, year, MONTHS.index(month_name)+1)
+    else:
+        st.caption('Tabel bisa digeser horizontal. Untuk paste banyak sel, mulai dari sel Service Name pada baris pertama.')
+        blank = pd.DataFrame([{col: '' for col in WIDE_COLS} for _ in range(3)])
+        frame = st.data_editor(blank, num_rows='dynamic', hide_index=True,
+                               use_container_width=True, key='svc_bulk_wide_editor',
+                               column_config={col: st.column_config.TextColumn(col) for col in WIDE_COLS})
+    records, errors, warnings = normalize_wide(frame, year)
+    for warning in warnings:
+        st.warning(warning)
     if errors:
         st.error(f'{len(errors)} masalah ditemukan. Perbaiki sebelum Save.')
-        for message in errors[:15]:
-            st.write('•', message)
-        if len(errors) > 15:
-            st.caption(f'Dan {len(errors)-15} masalah lainnya.')
+        for error in errors[:15]:
+            st.write('•', error)
     if records:
-        preview = pd.DataFrame(records).rename(columns={'service_name':'Service Name','ship_line':'Ship Line',
-                                                          'calls':'Call','local_volume':'Local','ts_volume':'TS'})
+        preview = pd.DataFrame(records).rename(columns={'service_name':'Service Name',
+                      'ship_line':'Ship Line','month':'Month','calls':'Call',
+                      'local_volume':'Local','ts_volume':'TS'})
+        preview['Month'] = preview['Month'].map(lambda m: MONTHS[m-1])
         preview['Total'] = preview['Local'] + preview['TS']
-        st.markdown(f'**Preview: {len(records)} record siap disimpan — {month_name} {year}**')
-        st.dataframe(preview[['Service Name','Ship Line','Call','Local','TS','Total']],
-                     hide_index=True, use_container_width=True)
-    st.caption('Baris subtotal seperti CIN1 Total / GRAND TOTAL dilewati. Service Name kosong mengikuti service terakhir. Total dihitung dari Local + TS.')
-    st.caption('Save menggunakan upsert: record dengan Year + Month + Service + Ship Line yang sama akan di-update; record lain tidak dihapus.')
+        st.markdown(f'**Preview: {len(records)} record bulanan dari {preview["Service Name"].nunique()} service**')
+        st.dataframe(preview[['Service Name','Ship Line','Month','Call','Local','TS','Total']],
+                     hide_index=True, use_container_width=True, height=300)
+    st.caption('Baris kosong dan subtotal dilewati. Service Name kosong mengikuti service sebelumnya. Save akan update data dengan Year + Month + Service + Ship Line yang sama tanpa menghapus record lain.')
     if st.button(f'Save {len(records)} Records to Supabase', type='primary',
                  disabled=bool(errors) or not records, key='svc_bulk_save'):
         try:
             save_batch(sb, records)
-            st.session_state['svc_saved_message'] = f'{len(records)} record berhasil disimpan / diperbarui. Buka tab Dashboard untuk melihat hasilnya.'
+            st.session_state['svc_saved_message'] = f'{len(records)} record berhasil disimpan.'
             st.rerun()
         except Exception as exc:
             st.error(f'Gagal menyimpan: {exc}')
@@ -339,7 +428,7 @@ def render(sb):
     st.header('Throughput Per Service')
     st.caption('Call, Local, TS & Total · per service dan shipping line')
     if st.session_state.pop('svc_saved_message', None):
-        st.success('Data Copy–Paste berhasil disimpan ke Supabase. Cek Dashboard (Year, Period, Service, Ship Line).')
+        st.success('Bulk Data Entry berhasil disimpan ke Supabase. Cek Dashboard (Year, Period, Service, Ship Line).')
     tab_dashboard, tab_input = st.tabs(['📊 Dashboard', '✏️ Input Data'])
     with tab_dashboard:
         dashboard(load(sb))
