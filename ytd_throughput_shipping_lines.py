@@ -41,7 +41,7 @@ def _sum(data, field):
 
 
 def _fmt(x):
-    return f'{x:,.0f}'
+    return f'{x:,.2f}'
 
 
 def _ratio(num, den):
@@ -90,7 +90,7 @@ def _display(df,kind):
            '2025 A':f'2025 {a}','2025 B':f'2025 {b}','2025 B %':f'2025 {b} %'}
     view=df.rename(columns=names)
     pct=['2026 Contribution',f'2026 {b} %','2025 Contribution',f'2025 {b} %','Growth']
-    fmt={c:'{:,.0f}' for c in view.columns if c not in ['Shipping Line']+pct}
+    fmt={c:'{:,.2f}' for c in view.columns if c not in ['Shipping Line']+pct}
     fmt.update({c:'{:.1%}' for c in pct})
     st.dataframe(view.style.format(fmt,na_rep='—'),use_container_width=True,hide_index=True)
     csv=view.to_csv(index=False).encode('utf-8-sig')
@@ -107,7 +107,7 @@ def _official_editor(sb, year, month, official):
         values={}
         for i,(label,db) in enumerate(zip(fields,DB_COLS)):
             with cols[i%2]:
-                values[db]=st.number_input(label,min_value=0.0,value=float(record.get(db) or 0),step=1.0,format='%.2f',key=f'ytd_off_{db}')
+                values[db]=st.number_input(label,min_value=0.0,value=float(record.get(db) or 0),step=0.25,format='%.2f',key=f'ytd_off_{db}')
         if st.form_submit_button('Save Official YTD Totals',type='primary'):
             try:
                 sb.table(OFFICIAL).upsert({'year':year,'month':month,**values},on_conflict='year,month').execute()
@@ -119,12 +119,12 @@ def _official_editor(sb, year, month, official):
 
 def _editor(sb,year,month,rows):
     st.subheader('Shipping Line Spreadsheet Editor')
-    st.caption('One row per shipping line. Full, Empty, Export, Import are entered; totals and percentages are calculated automatically.')
+    st.caption('One row per shipping line. Decimal TEUs are supported (e.g. 460302.75). Full, Empty, Export, Import are entered; totals and percentages are calculated automatically.')
     frame=pd.DataFrame(rows)
     if frame.empty:
         frame=pd.DataFrame(columns=['shipping_line']+DB_COLS)
     frame=frame.reindex(columns=['shipping_line']+DB_COLS).rename(columns={'shipping_line':'Shipping Line',**dict(zip(DB_COLS,INPUTS))})
-    edited=st.data_editor(frame,num_rows='dynamic',hide_index=True,use_container_width=True,key='ytd_detail_editor',column_config={'Shipping Line':st.column_config.TextColumn(required=True),**{c:st.column_config.NumberColumn(min_value=0,step=1,format='%.2f') for c in INPUTS}})
+    edited=st.data_editor(frame,num_rows='dynamic',hide_index=True,use_container_width=True,key='ytd_detail_editor',column_config={'Shipping Line':st.column_config.TextColumn(required=True),**{c:st.column_config.NumberColumn(min_value=0.0,step=0.25,format='%.2f') for c in INPUTS}})
     if st.button('Save Shipping Line Data',type='primary',key='ytd_save_editor'):
         payload=[]; seen=set()
         try:
@@ -227,7 +227,7 @@ def render(sb):
         a.metric(f'YTD {year} Throughput',_fmt(total26)+' TEUs')
         b.metric(f'YTD {year-1} Throughput',_fmt(total25)+' TEUs')
         c.metric('YoY Growth',_percent(total26-total25,total25))
-        d.metric('Volume Change',f'{total26-total25:+,.0f} TEUs')
+        d.metric('Volume Change',f'{total26-total25:+,.2f} TEUs')
         kind=st.segmented_control('Breakdown',CATEGORIES,default=CATEGORIES[0],key='ytd_breakdown')
         result=_prepare(rows,kind)
         if not result.empty:
