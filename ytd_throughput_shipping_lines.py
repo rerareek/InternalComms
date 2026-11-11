@@ -71,10 +71,10 @@ def _prepare(rows, kind):
     result = pd.DataFrame({
         'Shipping Line':df['shipping_line'], '2026 A':df[a], '2026 B':df[b],
         '2026 Total':df['2026 Total'],
-        '2026 Contribution':df['2026 Total'].div(grand26).where(grand26!=0),
+        '2026 Contribution':df['2026 Total'].div(grand26) if grand26 != 0 else pd.Series(0.0, index=df.index),
         '2026 B %':df[b].div(df['2026 Total'].replace(0,float('nan'))),
         '2025 A':df[c], '2025 B':df[d], '2025 Total':df['2025 Total'],
-        '2025 Contribution':df['2025 Total'].div(grand25).where(grand25!=0),
+        '2025 Contribution':df['2025 Total'].div(grand25) if grand25 != 0 else pd.Series(0.0, index=df.index),
         '2025 B %':df[d].div(df['2025 Total'].replace(0,float('nan'))),
         'Growth':(df['2026 Total']-df['2025 Total']).div(df['2025 Total'].replace(0,float('nan'))),
     })
