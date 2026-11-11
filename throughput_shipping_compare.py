@@ -113,6 +113,49 @@ def dashboard(df,year):
     st.download_button('Download comparison CSV',show.to_csv().encode('utf-8-sig'),file_name=f'shipping_compare_{year}.csv',mime='text/csv')
 
 
+def manage_data(sb, df, year):
+    st.divider()
+    st.subheader('Manage Data — Delete Records')
+    st.caption('Hapus data yang sudah tersimpan di Supabase. Penghapusan permanen dan Dashboard akan diperbarui setelah berhasil.')
+    if df.empty:
+        st.info(f'Belum ada data untuk tahun {year}.')
+        return
+
+    scope = st.radio('Delete scope', ['One shipping line · one month', 'One shipping line · full year', 'All shipping lines · one month', 'All data · full year'], horizontal=False, key=f'delete_scope_{year}')
+    names = sorted(df['shipping_line'].dropna().unique().tolist())
+    line = None
+    month = None
+    if scope.startswith('One shipping line'):
+        line = st.selectbox('Shipping Line', names, key=f'delete_line_{year}')
+    if scope.endswith('one month'):
+        month_name = st.selectbox('Month', MONTHS, key=f'delete_month_{year}')
+        month = MONTHS.index(month_name) + 1
+
+    matching = df.copy()
+    if line is not None:
+        matching = matching[matching['shipping_line'] == line]
+    if month is not None:
+        matching = matching[matching['month'] == month]
+    st.write(f'**{len(matching)} record(s)** akan dihapus dari tahun **{year}**.')
+    if matching.empty:
+        st.info('Tidak ada record yang cocok dengan pilihan ini.')
+        return
+    st.dataframe(matching.sort_values(['shipping_line', 'month']), hide_index=True, use_container_width=True, height=min(300, 45 + len(matching) * 35))
+    confirm = st.checkbox('Saya memahami bahwa data yang dipilih akan dihapus permanen.', key=f'confirm_delete_{year}_{scope}_{line}_{month}')
+    if st.button('Delete Selected Data', type='secondary', disabled=not confirm, key=f'delete_shipping_{year}'):
+        try:
+            query = sb.table(TABLE).delete().eq('year', year)
+            if line is not None:
+                query = query.eq('shipping_line', line)
+            if month is not None:
+                query = query.eq('month', month)
+            query.execute()
+            st.success(f'{len(matching)} record(s) dihapus. Dashboard diperbarui.')
+            st.rerun()
+        except Exception as exc:
+            st.error(f'Gagal menghapus data dari Supabase: {exc}')
+
+
 def input_data(sb,df,year):
     st.subheader('Input / Edit Shipping Line Data')
     st.caption('Isi Call, Forecast 2026, Budget 2026, Actual 2025. Total dan growth dihitung otomatis; tidak perlu diinput.')
@@ -151,6 +194,7 @@ def input_data(sb,df,year):
                     save(sb,records,year)
             except Exception as exc: st.error(f'Format paste tidak sesuai: {exc}')
     st.caption('Catatan: baris yang sudah tersimpan akan diperbarui berdasarkan Year + Month + Shipping Line, bukan diduplikasi.')
+    manage_data(sb, df, year)
 
 
 def records_from_wide(frame,year):
