@@ -92,7 +92,18 @@ def _display(df,kind):
     pct=['2026 Contribution',f'2026 {b} %','2025 Contribution',f'2025 {b} %','Growth']
     fmt={c:'{:,.2f}' for c in view.columns if c not in ['Shipping Line']+pct}
     fmt.update({c:'{:.1%}' for c in pct})
-    st.dataframe(view.style.format(fmt,na_rep='—'),use_container_width=True,hide_index=True)
+    # Group the year columns visually while keeping numerical precision unchanged.
+    cols_2026 = [c for c in view.columns if c.startswith('2026 ')]
+    cols_2025 = [c for c in view.columns if c.startswith('2025 ')]
+    def year_header_colors(column):
+        if column in cols_2026:
+            return 'background-color: #245A88; color: #FFFFFF; font-weight: 700;'
+        if column in cols_2025:
+            return 'background-color: #86C9F3; color: #102C43; font-weight: 700;'
+        return 'background-color: #E8EEF4; color: #1E293B; font-weight: 700;'
+    styled = (view.style.format(fmt,na_rep='—')
+              .apply_index(lambda columns: [year_header_colors(c) for c in columns], axis='columns'))
+    st.dataframe(styled,use_container_width=True,hide_index=True)
     csv=view.to_csv(index=False).encode('utf-8-sig')
     st.download_button('Download detailed CSV',csv,file_name=f'ytd_{kind.replace(" / ","_").lower()}.csv',mime='text/csv',key=f'ytd_dl_{kind}')
 
@@ -231,7 +242,9 @@ def render(sb):
         kind=st.segmented_control('Breakdown',CATEGORIES,default=CATEGORIES[0],key='ytd_breakdown')
         result=_prepare(rows,kind)
         if not result.empty:
-            chart_data=result.head(10)[['Shipping Line','2026 Total','2025 Total']].melt(id_vars='Shipping Line',var_name='Year',value_name='TEUs')
+            # OTHERS stays in the detail table and totals, but not in Top Shipping Lines chart.
+            chart_rows = result.loc[result['Shipping Line'].astype(str).str.strip().str.upper() != 'OTHERS'].head(10)
+            chart_data=chart_rows[['Shipping Line','2026 Total','2025 Total']].melt(id_vars='Shipping Line',var_name='Year',value_name='TEUs')
             fig=px.bar(chart_data,x='Shipping Line',y='TEUs',color='Year',barmode='group',title='Top Shipping Lines — YTD Comparison',color_discrete_map={'2026 Total':'#3B82F6','2025 Total':'#94A3B8'})
             fig.update_layout(xaxis_tickangle=-30,legend_title_text='')
             st.plotly_chart(fig,use_container_width=True,key=f'ytd_chart_{kind}')
