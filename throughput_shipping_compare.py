@@ -89,7 +89,7 @@ def totals_for_period(df, month=None):
     return totals
 
 
-def reconciliation(df,official,year):
+def reconciliation(df,official,year, *, widget_key="reconciliation"):
     st.subheader('Data Reconciliation')
     st.caption('Variance = Shipping Line Detail − Official KPI. Selisih tidak di-adjust otomatis.')
     monthly=official[official['month']>0] if not official.empty else pd.DataFrame()
@@ -109,7 +109,7 @@ def reconciliation(df,official,year):
     if rows:
         out=pd.DataFrame(rows)
         st.dataframe(out.style.format({'Official KPI':'{:,.2f}','Shipping Line Detail':'{:,.2f}','Variance':'{:+,.2f}'},na_rep='—').apply(lambda row:['background-color:#FFF4E6' if row['Status']=='Mismatch' else 'background-color:#EAF7F1' if row['Status']=='Matched' else '' for _ in row],axis=1),use_container_width=True,hide_index=True)
-        st.download_button('Download Reconciliation CSV',out.to_csv(index=False).encode('utf-8-sig'),file_name=f'reconciliation_{year}.csv',mime='text/csv')
+        st.download_button('Download Reconciliation CSV',out.to_csv(index=False).encode('utf-8-sig'),file_name=f'reconciliation_{year}.csv',mime='text/csv',key=f'{widget_key}_download_{year}')
     else:
         st.warning('Belum ada Official KPI untuk direkonsiliasi.')
 
@@ -183,7 +183,7 @@ def dashboard(df,official,year):
         st.dataframe(styled,use_container_width=True,height=490)
         st.download_button('Download comparison CSV',show.to_csv().encode('utf-8-sig'),file_name=f'shipping_compare_{year}.csv',mime='text/csv')
     st.divider()
-    reconciliation(df,official,year)
+    reconciliation(df,official,year,widget_key="dashboard_reconciliation")
 
 
 def official_input(sb,official,year):
@@ -351,4 +351,4 @@ def render(sb):
         official_tab,detail_tab,reconcile_tab=st.tabs(['Official KPI','Shipping Line Data','Data Reconciliation'])
         with official_tab: official_input(sb,official,int(year))
         with detail_tab: input_data(sb,df,int(year))
-        with reconcile_tab: reconciliation(df,official,int(year))
+        with reconcile_tab: reconciliation(df,official,int(year),widget_key="input_reconciliation")
