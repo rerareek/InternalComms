@@ -6,6 +6,7 @@ import altair as alt
 import pandas as pd
 from throughput_budget import render as render_budget
 from throughput_service import render as render_service
+from throughput_shipping_compare import render as render_shipping_compare
 import streamlit as st
 from supabase import Client, create_client
 
@@ -272,6 +273,7 @@ MENU_COMPANY = "🏢 Company Details"
 MENU_TP = "🚢 Tanjung Priok Throughput"
 MENU_BUDGET = "📊 Throughput vs Budget 25/26"
 MENU_SERVICE = "🚢 Throughput Per Service"
+MENU_SHIPPING_COMPARE = "📈 Throughput & Compare Shipping Line"
 # Sidebar styling — navigation only, existing page logic unchanged.
 st.markdown("""<style>
 section[data-testid="stSidebar"] {background: linear-gradient(165deg,#101d32 0%,#182d46 65%,#183d49 100%);}
@@ -299,7 +301,7 @@ with st.sidebar:
     </div>""", unsafe_allow_html=True)
     st.divider()
     st.caption("WORKSPACE MENU")
-    menu = st.radio("Navigation", [MENU_LOG, MENU_COMPANY, MENU_TP, MENU_BUDGET, MENU_SERVICE], label_visibility="collapsed")
+    menu = st.radio("Navigation", [MENU_LOG, MENU_COMPANY, MENU_TP, MENU_BUDGET, MENU_SERVICE, MENU_SHIPPING_COMPARE], label_visibility="collapsed")
     st.divider()
     st.markdown('<div style="font-size:11px;color:#a9bdd3;padding:8px 4px">INTERNALCOMMS  ·  Dashboard</div>',unsafe_allow_html=True)
 
@@ -814,3 +816,7 @@ elif menu == MENU_BUDGET:
 # ===== Page: Throughput Per Service =====
 elif menu == MENU_SERVICE:
     render_service(sb)
+
+
+elif menu == MENU_SHIPPING_COMPARE:
+    render_shipping_compare(sb)
