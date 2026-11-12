@@ -1,6 +1,7 @@
 """JICT operational performance: Dwelling, Productivity GCR & VOR, Divert."""
 import pandas as pd
 import streamlit as st
+import altair as alt
 
 MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 METRICS = {'Dwelling':['Import Full','Export Full','Overall'], 'Productivity GCR & VOR':['Gross QC Rate','Vess. Op. Rate']}
@@ -25,6 +26,81 @@ def _number(v):
     return float(v)
 
 
+def _monthly_chart(data, title, kind='line'):
+    """Plot months in calendar order, never alphabetical order."""
+    if data.empty:
+        st.info('No data available for this chart.')
+        return
+    base = alt.Chart(data).encode(
+        x=alt.X('Month:N', sort=MONTHS, title='Month'),
+        y=alt.Y('Value:Q', title=title),
+        color=alt.Color('Series:N', title='Metric'),
+        tooltip=[alt.Tooltip('Month:N'), alt.Tooltip('Series:N'), alt.Tooltip('Value:Q', format=',.2f')],
+    )
+    chart = base.mark_line(point=True) if kind == 'line' else base.mark_bar()
+    st.altair_chart(chart, use_container_width=True)
+
+
+def _overview(sb, year):
+    st.subheader('Operational Performance — Executive Dashboard')
+    st.caption(f'Monthly operational trends for {year}. Months always run January through December. Blank months are excluded from YTD averages.')
+    metrics = _load(sb, TABLE_METRICS, year)
+    divert = _load(sb, TABLE_DIVERT, year)
+    if not metrics.empty:
+        metrics = metrics.copy()
+        metrics['month'] = pd.to_numeric(metrics['month'], errors='coerce')
+        metrics['value'] = pd.to_numeric(metrics['value'], errors='coerce')
+    if not divert.empty:
+        divert = divert.copy()
+        divert['month'] = pd.to_numeric(divert['month'], errors='coerce')
+        for col in ('to_koja', 'from_koja'):
+            divert[col] = pd.to_numeric(divert[col], errors='coerce')
+
+    st.markdown('#### Dwelling')
+    d = metrics[metrics['category'] == 'Dwelling'] if not metrics.empty else pd.DataFrame()
+    if not d.empty:
+        cols = st.columns(3)
+        for i, name in enumerate(METRICS['Dwelling']):
+            v = d.loc[d['metric'] == name, 'value'].dropna()
+            cols[i].metric(f'{name} · Average YTD', f'{v.mean():,.2f}' if not v.empty else '—')
+        plot = d[d['metric'].isin(METRICS['Dwelling'])].dropna(subset=['month','value']).copy()
+        plot['Month'] = plot['month'].astype(int).map(dict(enumerate(MONTHS, 1)))
+        plot = plot.rename(columns={'metric':'Series','value':'Value'})
+        _monthly_chart(plot[['Month','Series','Value']], 'Dwelling (days)')
+    else:
+        st.info('No Dwelling data for the selected year.')
+
+    st.markdown('#### Productivity GCR & VOR')
+    prod = metrics[metrics['category'] == 'Productivity GCR & VOR'] if not metrics.empty else pd.DataFrame()
+    if not prod.empty:
+        cols = st.columns(2)
+        for i, name in enumerate(METRICS['Productivity GCR & VOR']):
+            v = prod.loc[prod['metric'] == name, 'value'].dropna()
+            cols[i].metric(f'{name} · Average YTD', f'{v.mean():,.2f}' if not v.empty else '—')
+        plot = prod[prod['metric'].isin(METRICS['Productivity GCR & VOR'])].dropna(subset=['month','value']).copy()
+        plot['Month'] = plot['month'].astype(int).map(dict(enumerate(MONTHS, 1)))
+        plot = plot.rename(columns={'metric':'Series','value':'Value'})
+        _monthly_chart(plot[['Month','Series','Value']], 'Productivity rate')
+    else:
+        st.info('No Productivity data for the selected year.')
+
+    st.markdown('#### Divert — To Koja vs From Koja')
+    if not divert.empty:
+        to_total = divert['to_koja'].sum()
+        from_total = divert['from_koja'].sum()
+        c1,c2,c3 = st.columns(3)
+        c1.metric('To Koja · YTD', f'{to_total:,.2f}')
+        c2.metric('From Koja · YTD', f'{from_total:,.2f}')
+        c3.metric('Total Divert · YTD', f'{to_total+from_total:,.2f}')
+        monthly = divert.groupby('month', as_index=False)[['to_koja','from_koja']].sum()
+        monthly['Month'] = monthly['month'].astype(int).map(dict(enumerate(MONTHS,1)))
+        plot = monthly.melt(id_vars='Month',value_vars=['to_koja','from_koja'],var_name='Series',value_name='Value')
+        plot['Series'] = plot['Series'].map({'to_koja':'To Koja','from_koja':'From Koja'})
+        _monthly_chart(plot[['Month','Series','Value']], 'Divert volume', kind='bar')
+    else:
+        st.info('No Divert data for the selected year.')
+
+
 def _metric_page(sb, kind, year):
     st.caption('Monthly values are stored with decimal precision. Average YTD excludes months without data.')
     df=_load(sb,TABLE_METRICS,year)
@@ -45,8 +121,8 @@ def _metric_page(sb, kind, year):
     with dash:
         st.subheader(kind)
         st.dataframe(display,hide_index=True,use_container_width=True,column_config={**{m:st.column_config.NumberColumn(m,format='%.2f') for m in MONTHS},'Average YTD':st.column_config.NumberColumn('Average YTD',format='%.2f')})
-        chart=wide.set_index('Metric')[MONTHS].T
-        st.line_chart(chart,use_container_width=True)
+        chart=wide.melt(id_vars='Metric',value_vars=MONTHS,var_name='Month',value_name='Value').dropna(subset=['Value'])
+        _monthly_chart(chart.rename(columns={'Metric':'Series'}), 'Dwelling (days)' if kind == 'Dwelling' else 'Productivity rate')
         st.info('Average YTD is the arithmetic mean of available monthly values; it is not weighted by container volume or vessel calls.')
     with inp:
         st.write('Edit monthly values; leave future months blank. Average YTD is calculated automatically.')
@@ -98,7 +174,9 @@ def _divert_page(sb,year):
         st.dataframe(totals,hide_index=True,use_container_width=True)
         st.bar_chart(totals.set_index('Shipping Line')[['To Koja','From Koja']],use_container_width=True)
         monthly=pd.DataFrame({'Month':MONTHS,'To Koja':[wide[c].sum() for c in tocols],'From Koja':[wide[c].sum() for c in fromcols]}).set_index('Month')
-        st.subheader('Monthly Divert');st.bar_chart(monthly,use_container_width=True)
+        st.subheader('Monthly Divert')
+        monthly_plot=monthly.reset_index().melt(id_vars='Month',var_name='Series',value_name='Value')
+        _monthly_chart(monthly_plot, 'Divert volume', kind='bar')
         with st.expander('Full Year Detail'):
             st.dataframe(wide,hide_index=True,use_container_width=True)
     with inp:
@@ -126,7 +204,8 @@ def _divert_page(sb,year):
 def render(sb):
     st.title('Operational Performance')
     year=st.selectbox('Reporting Year',list(range(2024,2031)),index=2,key='operational_year')
-    a,b,c=st.tabs(['Dwelling','Productivity GCR & VOR','Divert'])
+    overview_tab,a,b,c=st.tabs(['Dashboard','Dwelling','Productivity GCR & VOR','Divert'])
+    with overview_tab:_overview(sb,year)
     with a:_metric_page(sb,'Dwelling',year)
     with b:_metric_page(sb,'Productivity GCR & VOR',year)
     with c:_divert_page(sb,year)
