@@ -1,0 +1,1 @@
+Read-only tables now use HTML rendering to enforce centered headers and data, except the first column which is left-aligned. Existing st.data_editor inputs remain native Streamlit grids and are not changed. Read-only tables no longer have Streamlit dataframe sort/search/download controls. Test in deployment before replacing production.

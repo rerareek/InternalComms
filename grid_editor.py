@@ -4,12 +4,21 @@ Returns a pandas DataFrame compatible with existing Supabase save handlers.
 """
 import pandas as pd
 import streamlit as st
-from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode
+try:
+    from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode
+    _AGGRID_AVAILABLE = True
+except ImportError:
+    # Do not crash the whole application when optional AG Grid is unavailable.
+    _AGGRID_AVAILABLE = False
 
 
 def edit_table(_st, data, *args, **kwargs):
     if not isinstance(data, pd.DataFrame):
         raise TypeError('edit_table expects a pandas DataFrame')
+    if not _AGGRID_AVAILABLE:
+        # Streamlit's native editor is a safe functional fallback; its cell
+        # alignment is controlled by Streamlit, not by our CSS.
+        return _st.data_editor(data, *args, **kwargs)
     key = kwargs.get('key', 'jict_editor')
     dynamic = kwargs.get('num_rows', 'fixed') == 'dynamic'
     hide_index = kwargs.get('hide_index', False)
