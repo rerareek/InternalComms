@@ -4,6 +4,7 @@ from datetime import date
 
 import altair as alt
 import pandas as pd
+from executive_dashboard import render as render_executive_dashboard
 from throughput_budget import render as render_budget
 from throughput_service import render as render_service
 from throughput_shipping_compare import render as render_shipping_compare
@@ -270,6 +271,7 @@ require_login()
 sb = get_client()
 st.title("CRM UPDATE")
 
+MENU_EXECUTIVE = "🏆 Executive Dashboard"
 MENU_LOG = "📒 Log Book Meeting"
 MENU_COMPANY = "🏢 Company Details"
 MENU_TP = "🚢 Tanjung Priok Throughput"
@@ -305,12 +307,15 @@ with st.sidebar:
     </div>""", unsafe_allow_html=True)
     st.divider()
     st.caption("WORKSPACE MENU")
-    menu = st.radio("Navigation", [MENU_LOG, MENU_COMPANY, MENU_TP, MENU_BUDGET, MENU_SERVICE, MENU_SHIPPING_COMPARE, MENU_YTD_SHIPPING, MENU_OPERATIONAL], label_visibility="collapsed")
+    menu = st.radio("Navigation", [MENU_EXECUTIVE, MENU_LOG, MENU_COMPANY, MENU_TP, MENU_BUDGET, MENU_SERVICE, MENU_SHIPPING_COMPARE, MENU_YTD_SHIPPING, MENU_OPERATIONAL], label_visibility="collapsed")
     st.divider()
     st.markdown('<div style="font-size:11px;color:#a9bdd3;padding:8px 4px">INTERNALCOMMS  ·  Dashboard</div>',unsafe_allow_html=True)
 
 # ===== Page: Log Book Meeting =====
-if menu == MENU_LOG:
+if menu == MENU_EXECUTIVE:
+    render_executive_dashboard(sb)
+
+elif menu == MENU_LOG:
     st.header("Log Book Meeting")
     st.caption("Catat kegiatan harian marketing & cek historinya.")
 
