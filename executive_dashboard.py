@@ -372,6 +372,25 @@ def render(sb):
                 subtitle = alt.Chart(pd.DataFrame({'label':['JICT SHARE']})).mark_text(
                     fontSize=10,dy=18,color='#64748b').encode(text='label:N')
                 st.altair_chart((arc + center + subtitle).properties(height=300),use_container_width=True)
+                # Always-visible figures below each donut; no hover required.
+                details = d[['terminal', 'value', 'Share (%)']].copy()
+                details = details.rename(columns={'terminal': 'Terminal', 'value': 'YTD Volume (TEU)'})
+                details['Terminal'] = pd.Categorical(details['Terminal'], categories=TERMINALS, ordered=True)
+                details = details.sort_values('Terminal').reset_index(drop=True)
+                total_row = pd.DataFrame([{'Terminal': 'TOTAL', 'YTD Volume (TEU)': total,
+                                           'Share (%)': 100.0}])
+                details['Terminal'] = details['Terminal'].astype(str)
+                details = pd.concat([details, total_row], ignore_index=True)
+                st.dataframe(
+                    details.style.format({'YTD Volume (TEU)': '{:,.0f}',
+                                          'Share (%)': '{:.2f}%'}).apply(
+                        lambda row: ['font-weight: 700; background-color: rgba(128,145,166,0.12)'] * len(row)
+                        if row['Terminal'] == 'TOTAL' else [''] * len(row), axis=1),
+                    hide_index=True, use_container_width=True,
+                    column_config={'Terminal': st.column_config.TextColumn('Terminal'),
+                                   'YTD Volume (TEU)': st.column_config.NumberColumn('YTD Volume (TEU)'),
+                                   'Share (%)': st.column_config.NumberColumn('Market Share (%)')}
+                )
         # Comparison table highlights movement in percentage points, not volume growth.
         pivot = combined.pivot_table(index='terminal', columns='Year', values='Share (%)', aggfunc='sum')
         prev_col, now_col = str(year-1), str(year)
