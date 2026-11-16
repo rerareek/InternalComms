@@ -450,10 +450,29 @@ def render(sb):
         rank=rank[~rank['shipping_line'].astype(str).str.strip().str.upper().eq('OTHERS')]
         rank=rank[rank['TEUs']>0].nlargest(10,'TEUs').sort_values('TEUs')
         if not rank.empty:
-            st.altair_chart(alt.Chart(rank).mark_bar(cornerRadiusEnd=4,color='#2474B5').encode(
-                y=alt.Y('shipping_line:N',sort=rank['shipping_line'].tolist(),title=None),
-                x=alt.X('TEUs:Q',title='YTD TEUs'),tooltip=['shipping_line:N',alt.Tooltip('TEUs:Q',format=',.2f')]
-            ).properties(height=340),use_container_width=True)
+            # Keep both views tied to the exact same YTD ranking dataset.
+            rank_display = rank.sort_values('TEUs', ascending=False).reset_index(drop=True)
+            rank_display.insert(0, 'Rank', range(1, len(rank_display) + 1))
+            chart_col, table_col = st.columns([1.65, 1], gap='medium')
+            with chart_col:
+                st.altair_chart(alt.Chart(rank).mark_bar(cornerRadiusEnd=4,color='#2474B5').encode(
+                    y=alt.Y('shipping_line:N',sort=rank['shipping_line'].tolist(),title=None),
+                    x=alt.X('TEUs:Q',title='YTD TEUs'),
+                    tooltip=['shipping_line:N',alt.Tooltip('TEUs:Q',format=',.2f')]
+                ).properties(height=340),use_container_width=True)
+            with table_col:
+                st.markdown('**Top 10 · Volume Detail**')
+                st.dataframe(
+                    rank_display.rename(columns={'shipping_line': 'Shipping Line', 'TEUs': 'Volume (TEU)'}),
+                    hide_index=True,
+                    use_container_width=True,
+                    height=340,
+                    column_config={
+                        'Rank': st.column_config.NumberColumn('#', format='%d', width='small'),
+                        'Shipping Line': st.column_config.TextColumn('Shipping Line', width='medium'),
+                        'Volume (TEU)': st.column_config.NumberColumn('Volume (TEU)', format='%,.2f', width='medium'),
+                    },
+                )
         else: st.info('Belum ada data ranking.')
     else: st.info('Belum ada data ranking Shipping Line.')
 
