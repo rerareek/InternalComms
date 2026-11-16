@@ -1,3 +1,4 @@
+from grid_editor import edit_table
 """YTD Throughput by Shipping Lines — independent CRM menu."""
 from table_style import display_table
 import io
@@ -136,7 +137,7 @@ def _editor(sb,year,month,rows):
     if frame.empty:
         frame=pd.DataFrame(columns=['shipping_line']+DB_COLS)
     frame=frame.reindex(columns=['shipping_line']+DB_COLS).rename(columns={'shipping_line':'Shipping Line',**dict(zip(DB_COLS,INPUTS))})
-    edited=st.data_editor(frame,num_rows='dynamic',hide_index=True,use_container_width=True,key='ytd_detail_editor',column_config={'Shipping Line':st.column_config.TextColumn(required=True),**{c:st.column_config.NumberColumn(min_value=0.0,step=0.25,format='%.2f') for c in INPUTS}})
+    edited=edit_table(st, frame,num_rows='dynamic',hide_index=True,use_container_width=True,key='ytd_detail_editor',column_config={'Shipping Line':st.column_config.TextColumn(required=True),**{c:st.column_config.NumberColumn(min_value=0.0,step=0.25,format='%.2f') for c in INPUTS}})
     if st.button('Save Shipping Line Data',type='primary',key='ytd_save_editor'):
         payload=[]; seen=set()
         try:

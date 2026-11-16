@@ -1,3 +1,4 @@
+from grid_editor import edit_table
 """JICT operational performance: Dwelling, Productivity GCR & VOR, Divert."""
 from table_style import display_table
 import pandas as pd
@@ -127,7 +128,7 @@ def _metric_page(sb, kind, year):
         st.info('Average YTD is the arithmetic mean of available monthly values; it is not weighted by container volume or vessel calls.')
     with inp:
         st.write('Edit monthly values; leave future months blank. Average YTD is calculated automatically.')
-        edited=st.data_editor(wide,hide_index=True,use_container_width=True,key=f'operational_editor_{kind}_{year}',disabled=['Metric'],column_config={m:st.column_config.NumberColumn(m,format='%.2f',step=0.01) for m in MONTHS})
+        edited=edit_table(st, wide,hide_index=True,use_container_width=True,key=f'operational_editor_{kind}_{year}',disabled=['Metric'],column_config={m:st.column_config.NumberColumn(m,format='%.2f',step=0.01) for m in MONTHS})
         if st.button('Save Data',key=f'operational_save_{kind}_{year}',type='primary'):
             payload=[]
             for _,r in edited.iterrows():
@@ -182,7 +183,7 @@ def _divert_page(sb,year):
             display_table(st, wide,hide_index=True,use_container_width=True)
     with inp:
         st.caption('One row per shipping line. Blank months remain blank; totals are calculated automatically.')
-        edited=st.data_editor(wide,hide_index=True,num_rows='dynamic',use_container_width=True,key=f'divert_editor_{year}',column_config={c:st.column_config.NumberColumn(c,format='%.2f',step=0.01) for c in tocols+fromcols})
+        edited=edit_table(st, wide,hide_index=True,num_rows='dynamic',use_container_width=True,key=f'divert_editor_{year}',column_config={c:st.column_config.NumberColumn(c,format='%.2f',step=0.01) for c in tocols+fromcols})
         if st.button('Save Divert Data',type='primary',key=f'divert_save_{year}'):
             payload=[]
             for _,r in edited.iterrows():

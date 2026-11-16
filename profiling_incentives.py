@@ -1,3 +1,4 @@
+from grid_editor import edit_table
 """Profiling Incentives: interactive shipping line profiles, incentives and tariffs."""
 from table_style import display_table
 import pandas as pd
@@ -26,7 +27,7 @@ def _editor(df, table, cols, key, numeric=(), height=360, required=()):
         if c not in numeric:base[c]=base[c].fillna('').astype(str)
     config={c:st.column_config.NumberColumn(c.replace('_',' ').title(),format='%.2f') for c in numeric}
     for c in required:config[c]=st.column_config.TextColumn(c.replace('_',' ').title(),required=True)
-    edited=st.data_editor(base,num_rows='dynamic',hide_index=True,use_container_width=True,height=height,
+    edited=edit_table(st, base,num_rows='dynamic',hide_index=True,use_container_width=True,height=height,
                           column_config=config,key=key)
     if st.button('Save '+table.replace('_',' ').title(),type='primary',key='save_'+key):
         rows=[]

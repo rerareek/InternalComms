@@ -1,3 +1,4 @@
+from grid_editor import edit_table
 from table_style import display_table
 import calendar
 import hmac
@@ -804,7 +805,7 @@ elif menu == MENU_TP:
         ver = st.session_state.get("tp_ver", 0)
         orig = year_table(load_tp([year]), year)
         st.caption("Isi throughput per terminal per bulan. Kosongkan sel untuk menghapus data.")
-        edited = st.data_editor(
+        edited = edit_table(st, 
             orig, key=f"tp_ed_{year}_{ver}", width="stretch",
             column_config={m: st.column_config.NumberColumn(min_value=0, step=1, format="%d") for m in MONTHS_ID},
         )

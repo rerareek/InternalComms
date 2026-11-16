@@ -1,3 +1,4 @@
+from grid_editor import edit_table
 """Throughput & Compare Shipping Line | JICT CRM."""
 from table_style import display_table
 import io
@@ -277,7 +278,7 @@ def input_data(sb,df,year):
         st.caption('Edit langsung di tabel; tambah shipping line melalui baris baru. Kolom bulan ditampilkan berurutan.')
         wide=wide_data(df).reset_index()
         if wide.empty: wide=pd.DataFrame(columns=['Shipping Line']+[f'{m} · {f}' for m in MONTHS for f in FIELDS])
-        edited=st.data_editor(wide,num_rows='dynamic',hide_index=True,use_container_width=True,height=440,key=f'shipping_editor_{year}',column_config={'Shipping Line':st.column_config.TextColumn('Shipping Line',required=True)})
+        edited=edit_table(st, wide,num_rows='dynamic',hide_index=True,use_container_width=True,height=440,key=f'shipping_editor_{year}',column_config={'Shipping Line':st.column_config.TextColumn('Shipping Line',required=True)})
         if st.button('Save Spreadsheet Data',type='primary',key='save_shipping_editor'):
             try:
                 records=records_from_wide(edited,year)

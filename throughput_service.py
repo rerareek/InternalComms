@@ -1,3 +1,4 @@
+from grid_editor import edit_table
 """Throughput Per Service — dashboard and manual / Excel clipboard entry."""
 from table_style import display_table
 import io
@@ -395,7 +396,7 @@ def bulk_input(sb):
     else:
         st.caption('Tabel bisa digeser horizontal. Untuk paste banyak sel, mulai dari sel Service Name pada baris pertama.')
         blank = pd.DataFrame([{col: '' for col in WIDE_COLS} for _ in range(3)])
-        frame = st.data_editor(blank, num_rows='dynamic', hide_index=True,
+        frame = edit_table(st, blank, num_rows='dynamic', hide_index=True,
                                use_container_width=True, key='svc_bulk_wide_editor',
                                column_config={col: st.column_config.TextColumn(col) for col in WIDE_COLS})
     records, errors, warnings = normalize_wide(frame, year)
