@@ -1,6 +1,4 @@
-from grid_editor import edit_table
 """Throughput & Compare Shipping Line | JICT CRM."""
-from table_style import display_table
 import io
 import pandas as pd
 import plotly.graph_objects as go
@@ -110,7 +108,7 @@ def reconciliation(df,official,year, *, widget_key="reconciliation"):
             rows.append({'Period':label,'Metric':title,'Official KPI':official_value,'Shipping Line Detail':detail,'Variance':variance,'Status':'Matched' if variance is not None and abs(variance)<0.005 else 'Mismatch' if variance is not None else 'No official value'})
     if rows:
         out=pd.DataFrame(rows)
-        display_table(st, out.style.format({'Official KPI':'{:,.2f}','Shipping Line Detail':'{:,.2f}','Variance':'{:+,.2f}'},na_rep='—').apply(lambda row:['background-color:#FFF4E6' if row['Status']=='Mismatch' else 'background-color:#EAF7F1' if row['Status']=='Matched' else '' for _ in row],axis=1),use_container_width=True,hide_index=True)
+        st.dataframe(out.style.format({'Official KPI':'{:,.2f}','Shipping Line Detail':'{:,.2f}','Variance':'{:+,.2f}'},na_rep='—').apply(lambda row:['background-color:#FFF4E6' if row['Status']=='Mismatch' else 'background-color:#EAF7F1' if row['Status']=='Matched' else '' for _ in row],axis=1),use_container_width=True,hide_index=True)
         st.download_button('Download Reconciliation CSV',out.to_csv(index=False).encode('utf-8-sig'),file_name=f'reconciliation_{year}.csv',mime='text/csv',key=f'{widget_key}_download_{year}')
     else:
         st.warning('Belum ada Official KPI untuk direkonsiliasi.')
@@ -182,7 +180,7 @@ def dashboard(df,official,year):
         show.loc['GRAND TOTAL','YoY Growth']=pct(f-a,a)
         show.loc['GRAND TOTAL','Volume Change']=f-a
         styled=show.style.format({'Call':'{:,.0f}','Forecast 2026':'{:,.2f}','Budget 2026':'{:,.2f}','Actual 2025':'{:,.2f}','Vs Budget':'{:+.2%}','YoY Growth':'{:+.2%}','Volume Change':'{:+,.2f}'},na_rep='—').apply(lambda row:['background-color:#EAF4F7;font-weight:bold' if row.name=='GRAND TOTAL' else '' for _ in row],axis=1)
-        display_table(st, styled,use_container_width=True,height=490)
+        st.dataframe(styled,use_container_width=True,height=490)
         st.download_button('Download comparison CSV',show.to_csv().encode('utf-8-sig'),file_name=f'shipping_compare_{year}.csv',mime='text/csv')
     st.divider()
     reconciliation(df,official,year,widget_key="dashboard_reconciliation")
@@ -224,7 +222,7 @@ def official_input(sb,official,year):
     if not official.empty:
         view=official[['month','actual','forecast','budget','status','revision_note']].copy()
         view['Period']=view['month'].map(lambda m:'Full Year' if m==0 else MONTHS[m-1])
-        display_table(st, view[['Period','actual','forecast','budget','status','revision_note']],hide_index=True,use_container_width=True)
+        st.dataframe(view[['Period','actual','forecast','budget','status','revision_note']],hide_index=True,use_container_width=True)
 
 
 def manage_data(sb, df, year):
@@ -254,7 +252,7 @@ def manage_data(sb, df, year):
     if matching.empty:
         st.info('Tidak ada record yang cocok dengan pilihan ini.')
         return
-    display_table(st, matching.sort_values(['shipping_line', 'month']), hide_index=True, use_container_width=True, height=min(300, 45 + len(matching) * 35))
+    st.dataframe(matching.sort_values(['shipping_line', 'month']), hide_index=True, use_container_width=True, height=min(300, 45 + len(matching) * 35))
     confirm = st.checkbox('Saya memahami bahwa data yang dipilih akan dihapus permanen.', key=f'confirm_delete_{year}_{scope}_{line}_{month}')
     if st.button('Delete Selected Data', type='secondary', disabled=not confirm, key=f'delete_shipping_{year}'):
         try:
@@ -278,7 +276,7 @@ def input_data(sb,df,year):
         st.caption('Edit langsung di tabel; tambah shipping line melalui baris baru. Kolom bulan ditampilkan berurutan.')
         wide=wide_data(df).reset_index()
         if wide.empty: wide=pd.DataFrame(columns=['Shipping Line']+[f'{m} · {f}' for m in MONTHS for f in FIELDS])
-        edited=edit_table(st, wide,num_rows='dynamic',hide_index=True,use_container_width=True,height=440,key=f'shipping_editor_{year}',column_config={'Shipping Line':st.column_config.TextColumn('Shipping Line',required=True)})
+        edited=st.data_editor(wide,num_rows='dynamic',hide_index=True,use_container_width=True,height=440,key=f'shipping_editor_{year}',column_config={'Shipping Line':st.column_config.TextColumn('Shipping Line',required=True)})
         if st.button('Save Spreadsheet Data',type='primary',key='save_shipping_editor'):
             try:
                 records=records_from_wide(edited,year)
@@ -303,7 +301,7 @@ def input_data(sb,df,year):
                         if all(v is None for v in vals): continue
                         records.append({'year':year,'month':m+1,'shipping_line':line.upper(),'calls':int(vals[0]) if vals[0] is not None else None,'forecast':vals[1],'budget':vals[2],'actual':vals[3]})
                 st.success(f'{len(records)} monthly records siap disimpan.')
-                display_table(st, pd.DataFrame(records).head(50),hide_index=True,use_container_width=True)
+                st.dataframe(pd.DataFrame(records).head(50),hide_index=True,use_container_width=True)
                 if st.button('Save Bulk Data',type='primary',key='save_shipping_bulk'):
                     save(sb,records,year)
             except Exception as exc: st.error(f'Format paste tidak sesuai: {exc}')

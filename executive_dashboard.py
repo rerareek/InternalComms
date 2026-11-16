@@ -1,7 +1,6 @@
 """Executive Dashboard for JICT CRM. Reads the same live Supabase tables as source menus.
 No cached snapshots, no writes, and no hard-coded KPI values.
 """
-from table_style import display_table
 from datetime import date
 from html import escape
 import pandas as pd
@@ -217,13 +216,13 @@ def render(sb):
     yoy_val, yoy_note, yoy_color = growth_display(pct(forecast,actual25))
     budget_val, budget_note, budget_color = growth_display(pct(forecast,annual_budget26))
     render_kpi_cards([
-        ('Forecast 2026',fmt(forecast),'(TEU)','Full-year projected volume','◈','#2563eb'),
-        ('Budget 2026',fmt(annual_budget26),'(TEU)','Full-year target','◎','#7c3aed'),
-        ('Actual 2025',fmt(actual25),'(TEU)','Previous-year actual','▥','#0891b2'),
-        ('Forecast 2026 vs Actual 2025 — Full Year (%)',yoy_val,'',yoy_note,'↗',yoy_color),
-        ('Forecast 2026 vs Budget 2026 — Full Year (%)',budget_val,'',budget_note,'↗',budget_color),
-        (f'YTD {MONTHS[month-1]} {year} Volume',fmt(ytd_volume),'(TEU)',f'January–{MONTHS[month-1]} {year} · {ytd_source}','▤','#0f766e'),
-        (f'JICT Market Share {year}',fmt(ms,digits=2),'(%)',f'Tanjung Priok · YTD {MONTHS[month-1]}','◉','#d97706'),
+        ('Forecast 2026',fmt(forecast),'TEU','Full-year projected volume','◈','#2563eb'),
+        ('Budget 2026',fmt(annual_budget26),'TEU','Full-year target','◎','#7c3aed'),
+        ('Actual 2025',fmt(actual25),'TEU','Previous-year actual','▥','#0891b2'),
+        ('Growth 2026 vs 2025',yoy_val,'',yoy_note,'↗',yoy_color),
+        ('Growth vs Budget 2026',budget_val,'',budget_note,'↗',budget_color),
+        (f'YTD {MONTHS[month-1]} {year} Volume',fmt(ytd_volume),'TEU',f'January–{MONTHS[month-1]} {year} · {ytd_source}','▤','#0f766e'),
+        (f'JICT Market Share {year}',fmt(ms,digits=2),'%',f'Tanjung Priok · YTD {MONTHS[month-1]}','◉','#d97706'),
     ])
     if year != 2026:
         st.info('Annual Forecast 2026 / Budget 2026 / Actual 2025 cards and YTD shipping-line year columns are designed for 2026. Select 2026 for the intended comparison.')
@@ -252,8 +251,8 @@ def render(sb):
             def growth_series(numerator, denominator):
                 return ((numerator / denominator) - 1) * 100.0
             table = monthly.copy()
-            table['Forecast 2026 vs Actual 2025 — Change (%)'] = growth_series(table['2026 (Forecast)'], table['2025 (Actual)'].replace(0, float('nan')))
-            table['Forecast 2026 vs Budget 2026 — Variance (%)'] = growth_series(table['2026 (Forecast)'], table['Budget 2026'].replace(0, float('nan')))
+            table['Change (%) 2026 vs 2025'] = growth_series(table['2026 (Forecast)'], table['2025 (Actual)'].replace(0, float('nan')))
+            table['Change (%) 2026 vs Budget'] = growth_series(table['2026 (Forecast)'], table['Budget 2026'].replace(0, float('nan')))
             totals = monthly.sum(min_count=1)
             # Use annual official KPI figures for the total column when available.
             annuals = {'2025 (Actual)': actual25, 'Budget 2026': annual_budget26, '2026 (Forecast)': forecast}
@@ -261,8 +260,8 @@ def render(sb):
                 if official_value is not None:
                     totals[label] = official_value
             total_row = totals.to_dict()
-            total_row['Forecast 2026 vs Actual 2025 — Change (%)'] = pct(totals['2026 (Forecast)'], totals['2025 (Actual)'])
-            total_row['Forecast 2026 vs Budget 2026 — Variance (%)'] = pct(totals['2026 (Forecast)'], totals['Budget 2026'])
+            total_row['Change (%) 2026 vs 2025'] = pct(totals['2026 (Forecast)'], totals['2025 (Actual)'])
+            total_row['Change (%) 2026 vs Budget'] = pct(totals['2026 (Forecast)'], totals['Budget 2026'])
             table.loc['Total'] = total_row
             display = table.T
             display.index.name = 'Metric'
@@ -271,14 +270,14 @@ def render(sb):
             formatted = display.copy()
             for month_label in MONTHS + ['Total']:
                 formatted[month_label] = [
-                    (f'{v:+.2f}%' if pd.notna(v) else '—') if str(metric).endswith('(%)')
+                    (f'{v:+.2f}%' if pd.notna(v) else '—') if str(metric).startswith('Change (%)')
                     else (f'{v:,.2f}'.rstrip('0').rstrip('.') if pd.notna(v) else '—')
                     for metric, v in zip(display['Metric'], display[month_label])
                 ]
             st.caption('Monthly throughput and YoY / budget changes · Total growth is calculated from annual totals, not monthly percentage averages.')
-            display_table(st, formatted, hide_index=True, use_container_width=True)
+            st.dataframe(formatted, hide_index=True, use_container_width=True)
             with st.expander('Percentage change by month', expanded=False):
-                change_long = table.loc[MONTHS, ['Forecast 2026 vs Actual 2025 — Change (%)', 'Forecast 2026 vs Budget 2026 — Variance (%)']].reset_index().rename(columns={'Month': 'Month'})
+                change_long = table.loc[MONTHS, ['Change (%) 2026 vs 2025', 'Change (%) 2026 vs Budget']].reset_index().rename(columns={'Month': 'Month'})
                 change_long = change_long.rename(columns={'index': 'Month'}).melt(id_vars='Month', var_name='Comparison', value_name='Change (%)').dropna()
                 pct_chart = alt.Chart(change_long).mark_line(point=True, strokeWidth=2.5).encode(
                     x=alt.X('Month:N', sort=MONTHS, title=None),
@@ -296,9 +295,9 @@ def render(sb):
             f'Current market position and {year-1} vs {year} comparison · same YTD cutoff')
     if tp_total:
         share_cards = [
-            ('Total Tanjung Priok', fmt(tp_total), '(TEU)', f'Combined terminal throughput · YTD {MONTHS[month-1]}', '▦', '#2563eb'),
-            ('JICT Throughput', fmt(jict), '(TEU)', f'JICT volume · YTD {MONTHS[month-1]}', '▥', '#0d9488'),
-            ('JICT Market Share', fmt(ms, digits=2), '(%)', 'Share of Tanjung Priok throughput', '◉', '#7c3aed'),
+            ('Total Tanjung Priok', fmt(tp_total), 'TEU', f'Combined terminal throughput · YTD {MONTHS[month-1]}', '▦', '#2563eb'),
+            ('JICT Throughput', fmt(jict), 'TEU', f'JICT volume · YTD {MONTHS[month-1]}', '▥', '#0d9488'),
+            ('JICT Market Share', fmt(ms, digits=2), '%', 'Share of Tanjung Priok throughput', '◉', '#7c3aed'),
         ]
         st.markdown("""<style>
         .jict-share-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:10px 0 18px}
@@ -407,7 +406,7 @@ def render(sb):
                     'Change (pp)': 0.0,
                 })
                 st.markdown("**Terminal share · detailed figures**")
-                display_table(st, 
+                st.dataframe(
                     pd.DataFrame(compact_rows),
                     hide_index=True,
                     use_container_width=True,
@@ -437,7 +436,7 @@ def render(sb):
             with p1:
                 st.altair_chart(alt.Chart(lines).mark_arc(innerRadius=65).encode(theta='TEUs:Q',color=alt.Color('shipping_line:N',title='Shipping Line'),tooltip=['shipping_line:N',alt.Tooltip('TEUs:Q',format=',.0f'),alt.Tooltip('Share (%):Q',format='.2f')]).properties(height=330),use_container_width=True)
             with p2:
-                display_table(st, lines.rename(columns={'shipping_line':'Shipping Line'}).style.format({'TEUs':'{:,.0f}','Share (%)':'{:.2f}%'}),hide_index=True,use_container_width=True,height=330)
+                st.dataframe(lines.rename(columns={'shipping_line':'Shipping Line'}).style.format({'TEUs':'{:,.0f}','Share (%)':'{:.2f}%'}),hide_index=True,use_container_width=True,height=330)
             if ytd_volume is not None and abs(lines['TEUs'].sum()-ytd_volume)>0.01:
                 st.warning(f'Reconciliation: total shipping-line detail {lines["TEUs"].sum():,.2f} vs {ytd_source} {ytd_volume:,.2f} TEU.')
         else: st.info('Volume shipping line belum diisi.')
@@ -463,7 +462,7 @@ def render(sb):
                 ).properties(height=340),use_container_width=True)
             with table_col:
                 st.markdown('**Top 10 · Volume Detail**')
-                display_table(st, 
+                st.dataframe(
                     rank_display.rename(columns={'shipping_line': 'Shipping Line', 'TEUs': 'Volume (TEU)'}),
                     hide_index=True,
                     use_container_width=True,

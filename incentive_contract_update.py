@@ -1,4 +1,3 @@
-from grid_editor import edit_table
 """Editable Incentive & Contract Update tracker, backed by Supabase."""
 import pandas as pd
 import streamlit as st
@@ -56,7 +55,7 @@ def render_contract_update():
         "remark":st.column_config.TextColumn("Remark",width="large"),
         "incentive_details":st.column_config.TextColumn("Incentive Details",width="large"),
     })
-    edited = edit_table(st, view, num_rows="dynamic", hide_index=True, use_container_width=True,
+    edited = st.data_editor(view, num_rows="dynamic", hide_index=True, use_container_width=True,
                             column_config=cfg, key="contract_update_editor")
     with st.expander("Important data notes"):
         st.write("The supplied reference lists contract periods, remarks and document types, but does not include incentive amounts or terms. The Incentive Details field is blank until entered.")

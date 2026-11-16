@@ -1,4 +1,3 @@
-from grid_editor import edit_table
 """Throughput vs Budget 25/26 dashboard; data persisted in Supabase."""
 import pandas as pd
 import plotly.graph_objects as go
@@ -57,7 +56,7 @@ def render(sb):
     st.caption('Change (%) dihitung otomatis dari angka yang tersimpan.')
     with st.expander('✏️ Input / Edit Data',expanded=False):
         st.caption('Edit monthly TEUs and the supplied Total. Save to Supabase to share updates with your team.')
-        editor = edit_table(st, totals_df, key='budget_editor',use_container_width=True,num_rows='fixed',column_config={m:st.column_config.NumberColumn(m,min_value=0,step=1,format='%d') for m in MONTHS+['Total']})
+        editor = st.data_editor(totals_df, key='budget_editor',use_container_width=True,num_rows='fixed',column_config={m:st.column_config.NumberColumn(m,min_value=0,step=1,format='%d') for m in MONTHS+['Total']})
         if st.button('Save Throughput vs Budget',type='primary'):
             try:
                 records=[]

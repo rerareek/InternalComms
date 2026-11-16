@@ -1,6 +1,4 @@
-from grid_editor import edit_table
 """YTD Throughput by Shipping Lines — independent CRM menu."""
-from table_style import display_table
 import io
 import pandas as pd
 import plotly.express as px
@@ -105,7 +103,7 @@ def _display(df,kind):
         return 'background-color: #E8EEF4; color: #1E293B; font-weight: 700;'
     styled = (view.style.format(fmt,na_rep='—')
               .apply_index(lambda columns: [year_header_colors(c) for c in columns], axis='columns'))
-    display_table(st, styled,use_container_width=True,hide_index=True)
+    st.dataframe(styled,use_container_width=True,hide_index=True)
     csv=view.to_csv(index=False).encode('utf-8-sig')
     st.download_button('Download detailed CSV',csv,file_name=f'ytd_{kind.replace(" / ","_").lower()}.csv',mime='text/csv',key=f'ytd_dl_{kind}')
 
@@ -137,7 +135,7 @@ def _editor(sb,year,month,rows):
     if frame.empty:
         frame=pd.DataFrame(columns=['shipping_line']+DB_COLS)
     frame=frame.reindex(columns=['shipping_line']+DB_COLS).rename(columns={'shipping_line':'Shipping Line',**dict(zip(DB_COLS,INPUTS))})
-    edited=edit_table(st, frame,num_rows='dynamic',hide_index=True,use_container_width=True,key='ytd_detail_editor',column_config={'Shipping Line':st.column_config.TextColumn(required=True),**{c:st.column_config.NumberColumn(min_value=0.0,step=0.25,format='%.2f') for c in INPUTS}})
+    edited=st.data_editor(frame,num_rows='dynamic',hide_index=True,use_container_width=True,key='ytd_detail_editor',column_config={'Shipping Line':st.column_config.TextColumn(required=True),**{c:st.column_config.NumberColumn(min_value=0.0,step=0.25,format='%.2f') for c in INPUTS}})
     if st.button('Save Shipping Line Data',type='primary',key='ytd_save_editor'):
         payload=[]; seen=set()
         try:
@@ -203,7 +201,7 @@ def _reconcile(rows, official):
         detail=_sum(df,db)
         target=float(off.get(db) or 0)
         checks.append({'Metric':label,'Official':target,'Detail Sum':detail,'Variance':detail-target,'Status':'Matched' if abs(detail-target)<0.01 else 'Mismatch'})
-    display_table(st, pd.DataFrame(checks),hide_index=True,use_container_width=True,column_config={'Official':st.column_config.NumberColumn(format='%.2f'),'Detail Sum':st.column_config.NumberColumn(format='%.2f'),'Variance':st.column_config.NumberColumn(format='%+.2f')})
+    st.dataframe(pd.DataFrame(checks),hide_index=True,use_container_width=True,column_config={'Official':st.column_config.NumberColumn(format='%.2f'),'Detail Sum':st.column_config.NumberColumn(format='%.2f'),'Variance':st.column_config.NumberColumn(format='%+.2f')})
     if any(c['Status']=='Mismatch' for c in checks):
         st.warning('Detail totals differ from official figures. Check the source spreadsheet and missing/duplicate lines; no automatic adjustment was applied.')
     else: st.success('All 8 components match the official totals.')
