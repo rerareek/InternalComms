@@ -285,64 +285,22 @@ MENU_YTD_SHIPPING = "📦 YTD Throughput by Shipping Lines"
 MENU_OPERATIONAL = "📊 Operational Performance"
 MENU_CONTRACT = "📄 Profilling Incentives & Contract Update"
 MENU_SHIPPING_MAINTENANCE = "🚢 Shipping Data Maintenence"
-# Sidebar navigation: compact square cards with visible icon + label.
-# Keep st.radio for native Streamlit state, keyboard access and page routing.
+# Sidebar styling — navigation only, existing page logic unchanged.
 st.markdown("""<style>
-section[data-testid="stSidebar"] {background:linear-gradient(165deg,#101d32 0%,#182d46 65%,#183d49 100%);}
+section[data-testid="stSidebar"] {background: linear-gradient(165deg,#101d32 0%,#182d46 65%,#183d49 100%);}
 section[data-testid="stSidebar"] * {color:#e9f1fa;}
-section[data-testid="stSidebar"] div[role="radiogroup"] {
-  display:grid !important;
-  grid-template-columns:repeat(2,minmax(0,1fr));
-  gap:10px !important;
-  align-items:stretch;
-}
+section[data-testid="stSidebar"] [data-testid="stRadio"] label {font-weight:500;}
+section[data-testid="stSidebar"] div[role="radiogroup"] {gap:9px;}
 section[data-testid="stSidebar"] div[role="radiogroup"] > label {
-  position:relative;
-  display:flex !important;
-  align-items:center;
-  justify-content:center;
-  text-align:center;
-  width:100%;
-  min-width:0;
-  min-height:116px;
-  aspect-ratio:1 / 1;
-  margin:0 !important;
-  padding:12px 8px !important;
-  border:1px solid rgba(255,255,255,.13);
-  border-radius:14px;
-  background:rgba(255,255,255,.055);
-  cursor:pointer;
-  transition:background .18s ease,border-color .18s ease,transform .18s ease,box-shadow .18s ease;
+  border:1px solid rgba(255,255,255,.10); border-radius:11px;
+  background:rgba(255,255,255,.045); padding:12px 10px;
+  transition:background .2s ease,border-color .2s ease;
 }
 section[data-testid="stSidebar"] div[role="radiogroup"] > label:hover {
-  background:rgba(59,130,246,.22);
-  border-color:rgba(125,190,255,.75);
-  transform:translateY(-2px);
-  box-shadow:0 6px 16px rgba(0,0,0,.18);
+  background:rgba(59,130,246,.18); border-color:rgba(96,165,250,.45);
 }
 section[data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) {
-  background:rgba(20,184,166,.22);
-  border-color:#2dd4bf;
-  box-shadow:inset 0 0 0 1px rgba(45,212,191,.35);
-}
-section[data-testid="stSidebar"] div[role="radiogroup"] > label:focus-within {
-  outline:2px solid #93c5fd;
-  outline-offset:2px;
-}
-section[data-testid="stSidebar"] div[role="radiogroup"] > label > div:first-child {
-  position:absolute !important;
-  width:1px !important;
-  height:1px !important;
-  overflow:hidden !important;
-  clip-path:inset(50%);
-}
-section[data-testid="stSidebar"] div[role="radiogroup"] > label [data-testid="stMarkdownContainer"] p {
-  margin:0;
-  font-size:12px;
-  font-weight:600;
-  line-height:1.45;
-  overflow-wrap:anywhere;
-  white-space:normal;
+  background:rgba(20,184,166,.20); border-color:#2dd4bf;
 }
 section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {line-height:1.45;}
 </style>""", unsafe_allow_html=True)
