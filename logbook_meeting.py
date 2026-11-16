@@ -10,6 +10,7 @@ from throughput_service import render as render_service
 from throughput_shipping_compare import render as render_shipping_compare
 from ytd_throughput_shipping_lines import render as render_ytd_shipping_lines
 from operational_metrics import render as render_operational_metrics
+from incentive_contract_update import render as render_incentive_contract_update
 import streamlit as st
 from supabase import Client, create_client
 
@@ -280,6 +281,7 @@ MENU_SERVICE = "🚢 Throughput Per Service"
 MENU_SHIPPING_COMPARE = "📈 Throughput & Compare Shipping Line"
 MENU_YTD_SHIPPING = "📦 YTD Throughput by Shipping Lines"
 MENU_OPERATIONAL = "📊 Operational Performance"
+MENU_CONTRACT = "📄 Incentive & Contract Update"
 # Sidebar styling — navigation only, existing page logic unchanged.
 st.markdown("""<style>
 section[data-testid="stSidebar"] {background: linear-gradient(165deg,#101d32 0%,#182d46 65%,#183d49 100%);}
@@ -307,7 +309,7 @@ with st.sidebar:
     </div>""", unsafe_allow_html=True)
     st.divider()
     st.caption("WORKSPACE MENU")
-    menu = st.radio("Navigation", [MENU_EXECUTIVE, MENU_LOG, MENU_COMPANY, MENU_TP, MENU_BUDGET, MENU_SERVICE, MENU_SHIPPING_COMPARE, MENU_YTD_SHIPPING, MENU_OPERATIONAL], label_visibility="collapsed")
+    menu = st.radio("Navigation", [MENU_EXECUTIVE, MENU_LOG, MENU_TP, MENU_BUDGET, MENU_SERVICE, MENU_SHIPPING_COMPARE, MENU_YTD_SHIPPING, MENU_OPERATIONAL, MENU_CONTRACT, MENU_COMPANY], label_visibility="collapsed")
     st.divider()
     st.markdown('<div style="font-size:11px;color:#a9bdd3;padding:8px 4px">INTERNALCOMMS  ·  Dashboard</div>',unsafe_allow_html=True)
 
@@ -838,3 +840,7 @@ elif menu == MENU_YTD_SHIPPING:
 # ===== Page: Operational Performance =====
 elif menu == MENU_OPERATIONAL:
     render_operational_metrics(sb)
+
+
+elif menu == MENU_CONTRACT:
+    render_incentive_contract_update()
