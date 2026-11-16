@@ -1,3 +1,4 @@
+from table_style import display_table
 import calendar
 import hmac
 from datetime import date
@@ -22,17 +23,25 @@ st.set_page_config(page_title="CRM UPDATE", page_icon="📊", layout="wide")
 
 
 # ---------- Login ----------
+def _check_password():
+    """Authenticate when Streamlit commits the password input (Enter or blur)."""
+    pw = st.session_state.get("login_password", "")
+    if pw and hmac.compare_digest(pw, st.secrets["app_password"]):
+        st.session_state["auth"] = True
+        st.session_state["login_error"] = False
+        st.session_state.pop("login_password", None)
+    elif pw:
+        st.session_state["login_error"] = True
+
+
 def require_login():
     if st.session_state.get("auth"):
         return
     st.title("CRM UPDATE")
-    pw = st.text_input("Password", type="password")
-    if st.button("Masuk", type="primary"):
-        if hmac.compare_digest(pw, st.secrets["app_password"]):
-            st.session_state["auth"] = True
-            st.rerun()
-        else:
-            st.error("Password salah.")
+    st.text_input("Password", type="password", key="login_password", on_change=_check_password,
+                  help="Login is checked automatically when the password field is submitted or loses focus.")
+    if st.session_state.get("login_error"):
+        st.error("Password salah.")
     st.stop()
 
 
@@ -393,7 +402,7 @@ elif menu == MENU_LOG:
                         "discussion": "Discussion",
                     }
                 ).drop(columns=["created_at"])
-                st.dataframe(show, width="stretch", hide_index=True)
+                display_table(st, show, width="stretch", hide_index=True)
             else:
                 for day, grp in df.groupby("meeting_date", sort=False):
                     st.subheader(day.strftime("%A, %d %B %Y"))
@@ -514,7 +523,7 @@ elif menu == MENU_COMPANY:
                         st.markdown(f"**Address:** {c.get('address') or '-'}")
                         st.markdown(f"**Company Anniversary:** {fmt_dm(c.get('anniversary')) or '-'}")
                         if cs:
-                            st.dataframe(
+                            display_table(st, 
                                 pd.DataFrame(
                                     [
                                         {
@@ -532,7 +541,7 @@ elif menu == MENU_COMPANY:
                         else:
                             st.caption("Belum ada kontak.")
             else:
-                st.dataframe(pd.DataFrame(flat_rows(shown, by_co, True)), width="stretch", hide_index=True)
+                display_table(st, pd.DataFrame(flat_rows(shown, by_co, True)), width="stretch", hide_index=True)
 
             st.download_button(
                 "⬇️ Download CSV",
@@ -773,17 +782,17 @@ elif menu == MENU_TP:
         st.markdown("**Perbandingan Throughput & Market Share**")
         fmt = {f"Throughput {t0}": "{:,.0f}", f"Throughput {t1}": "{:,.0f}", "Growth (%)": "{:+.1f}",
                f"MS {t0} (%)": "{:.1f}", f"MS {t1} (%)": "{:.1f}", "Δ MS (pp)": "{:+.1f}"}
-        st.dataframe(comp.style.format(fmt, na_rep="-"), hide_index=True, width="stretch")
+        display_table(st, comp.style.format(fmt, na_rep="-"), hide_index=True, width="stretch")
 
     # ---- Tabel ----
     elif tp_page == "Tabel":
         year = st.selectbox("Tahun", years, key="tp_tbl_year")
         t = with_totals(year_table(load_tp([year]), year))
         st.markdown("**Throughput**")
-        st.dataframe(t.style.format({**{m: "{:,.0f}" for m in MONTHS_ID + ["TOTAL"]}, "MS": "{:.1f}%"}, na_rep="-"),
+        display_table(st, t.style.format({**{m: "{:,.0f}" for m in MONTHS_ID + ["TOTAL"]}, "MS": "{:.1f}%"}, na_rep="-"),
                      width="stretch")
         st.markdown("**Market Share per bulan** (otomatis dari tabel di atas)")
-        st.dataframe(ms_table(t).style.format("{:.1f}%", na_rep="-"), width="stretch")
+        display_table(st, ms_table(t).style.format("{:.1f}%", na_rep="-"), width="stretch")
         st.download_button("⬇️ Download CSV (throughput)", t.to_csv().encode("utf-8"),
                            file_name=f"throughput_{year}.csv", mime="text/csv")
 

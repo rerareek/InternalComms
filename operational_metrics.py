@@ -1,4 +1,5 @@
 """JICT operational performance: Dwelling, Productivity GCR & VOR, Divert."""
+from table_style import display_table
 import pandas as pd
 import streamlit as st
 import altair as alt
@@ -120,7 +121,7 @@ def _metric_page(sb, kind, year):
     dash,inp=st.tabs(['Dashboard','Input Data'])
     with dash:
         st.subheader(kind)
-        st.dataframe(display,hide_index=True,use_container_width=True,column_config={**{m:st.column_config.NumberColumn(m,format='%.2f') for m in MONTHS},'Average YTD':st.column_config.NumberColumn('Average YTD',format='%.2f')})
+        display_table(st, display,hide_index=True,use_container_width=True,column_config={**{m:st.column_config.NumberColumn(m,format='%.2f') for m in MONTHS},'Average YTD':st.column_config.NumberColumn('Average YTD',format='%.2f')})
         chart=wide.melt(id_vars='Metric',value_vars=MONTHS,var_name='Month',value_name='Value').dropna(subset=['Value'])
         _monthly_chart(chart.rename(columns={'Metric':'Series'}), 'Dwelling (days)' if kind == 'Dwelling' else 'Productivity rate')
         st.info('Average YTD is the arithmetic mean of available monthly values; it is not weighted by container volume or vessel calls.')
@@ -171,14 +172,14 @@ def _divert_page(sb,year):
         a.metric('To Koja',f"{totals['To Koja'].sum():,.2f}")
         b.metric('From Koja',f"{totals['From Koja'].sum():,.2f}")
         c.metric('Total Divert',f"{totals['Total Divert'].sum():,.2f}")
-        st.dataframe(totals,hide_index=True,use_container_width=True)
+        display_table(st, totals,hide_index=True,use_container_width=True)
         st.bar_chart(totals.set_index('Shipping Line')[['To Koja','From Koja']],use_container_width=True)
         monthly=pd.DataFrame({'Month':MONTHS,'To Koja':[wide[c].sum() for c in tocols],'From Koja':[wide[c].sum() for c in fromcols]}).set_index('Month')
         st.subheader('Monthly Divert')
         monthly_plot=monthly.reset_index().melt(id_vars='Month',var_name='Series',value_name='Value')
         _monthly_chart(monthly_plot, 'Divert volume', kind='bar')
         with st.expander('Full Year Detail'):
-            st.dataframe(wide,hide_index=True,use_container_width=True)
+            display_table(st, wide,hide_index=True,use_container_width=True)
     with inp:
         st.caption('One row per shipping line. Blank months remain blank; totals are calculated automatically.')
         edited=st.data_editor(wide,hide_index=True,num_rows='dynamic',use_container_width=True,key=f'divert_editor_{year}',column_config={c:st.column_config.NumberColumn(c,format='%.2f',step=0.01) for c in tocols+fromcols})
