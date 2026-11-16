@@ -471,56 +471,54 @@ def render(sb):
     else:
         st.info('Belum ada data market share untuk perbandingan tahun.')
 
-    section(f'Shipping Line Share · YTD {MONTHS[month-1]} {year}', 'Pangsa shipping line berdasarkan Full + Empty; OTHERS tetap masuk total')
+    section(f'Shipping Line Performance & Contribution · YTD {MONTHS[month-1]} {year}',
+            'Volume (TEU) dan kontribusi (%) dalam satu grafik · Full + Empty · OTHERS termasuk total share')
     if not ytd.empty and all(c in ytd for c in ['shipping_line','full_2026','empty_2026']):
-        lines=ytd.copy()
-        lines['TEUs']=num(lines,'full_2026').fillna(0)+num(lines,'empty_2026').fillna(0)
-        lines=lines.groupby('shipping_line',as_index=False)['TEUs'].sum().sort_values('TEUs',ascending=False)
-        if lines['TEUs'].sum()>0:
-            lines['Share (%)']=lines['TEUs']/lines['TEUs'].sum()*100
-            p1,p2=st.columns([1,1])
-            with p1:
-                st.altair_chart(alt.Chart(lines).mark_arc(innerRadius=65).encode(theta='TEUs:Q',color=alt.Color('shipping_line:N',title='Shipping Line'),tooltip=['shipping_line:N',alt.Tooltip('TEUs:Q',format=',.0f'),alt.Tooltip('Share (%):Q',format='.2f')]).properties(height=330),use_container_width=True)
-            with p2:
-                centered_dataframe(lines.rename(columns={'shipping_line':'Shipping Line'}).style.format({'TEUs':'{:,.0f}','Share (%)':'{:.2f}%'}),hide_index=True,use_container_width=True,height=330)
-            if ytd_volume is not None and abs(lines['TEUs'].sum()-ytd_volume)>0.01:
-                st.warning(f'Reconciliation: total shipping-line detail {lines["TEUs"].sum():,.2f} vs {ytd_source} {ytd_volume:,.2f} TEU.')
-        else: st.info('Volume shipping line belum diisi.')
-    else: st.info('Belum ada data Shipping Line YTD untuk bulan ini.')
-
-    section('Top 10 Shipping Lines and Volume', 'Ranking berdasarkan YTD 2026 Full + Empty · OTHERS tidak masuk ranking')
-    if not ytd.empty and all(c in ytd for c in ['shipping_line','full_2026','empty_2026']):
-        rank=ytd.copy()
-        rank['TEUs']=num(rank,'full_2026').fillna(0)+num(rank,'empty_2026').fillna(0)
-        rank=rank.groupby('shipping_line',as_index=False)['TEUs'].sum()
-        rank=rank[~rank['shipping_line'].astype(str).str.strip().str.upper().eq('OTHERS')]
-        rank=rank[rank['TEUs']>0].nlargest(10,'TEUs').sort_values('TEUs')
-        if not rank.empty:
-            # Keep both views tied to the exact same YTD ranking dataset.
-            rank_display = rank.sort_values('TEUs', ascending=False).reset_index(drop=True)
-            rank_display.insert(0, 'Rank', range(1, len(rank_display) + 1))
-            chart_col, table_col = st.columns([1.65, 1], gap='medium')
-            with chart_col:
-                st.altair_chart(alt.Chart(rank).mark_bar(cornerRadiusEnd=4,color='#2474B5').encode(
-                    y=alt.Y('shipping_line:N',sort=rank['shipping_line'].tolist(),title=None),
-                    x=alt.X('TEUs:Q',title='YTD TEUs'),
-                    tooltip=['shipping_line:N',alt.Tooltip('TEUs:Q',format=',.2f')]
-                ).properties(height=340),use_container_width=True)
-            with table_col:
-                st.markdown('**Top 10 · Volume Detail**')
+        lines = ytd.copy()
+        lines['Volume (TEU)'] = num(lines,'full_2026').fillna(0) + num(lines,'empty_2026').fillna(0)
+        lines = lines.groupby('shipping_line',as_index=False)['Volume (TEU)'].sum()
+        lines = lines[lines['Volume (TEU)'] > 0].sort_values('Volume (TEU)',ascending=False)
+        total_detail = float(lines['Volume (TEU)'].sum())
+        if total_detail > 0:
+            lines['Contribution (%)'] = lines['Volume (TEU)'] / total_detail * 100
+            eligible = lines[~lines['shipping_line'].astype(str).str.strip().str.upper().eq('OTHERS')]
+            top = eligible.head(10).copy()
+            top['Label'] = top.apply(
+                lambda r: f"{r['Volume (TEU)']:,.0f} TEU  ·  {r['Contribution (%)']:.1f}%", axis=1)
+            left, right = st.columns([1.75, 1], gap='medium')
+            with left:
+                st.markdown('**Top 10 · Volume & Contribution**')
+                if not top.empty:
+                    # Labels show share of ALL shipping lines, including OTHERS.
+                    plot = alt.Chart(top).mark_bar(cornerRadiusEnd=4,color='#2474B5').encode(
+                        y=alt.Y('shipping_line:N',sort=top['shipping_line'].tolist(),title=None),
+                        x=alt.X('Volume (TEU):Q',title='Volume (TEU)'),
+                        tooltip=['shipping_line:N',
+                                 alt.Tooltip('Volume (TEU):Q',format=',.0f'),
+                                 alt.Tooltip('Contribution (%):Q',format='.2f')]
+                    )
+                    labels = alt.Chart(top).mark_text(align='left',dx=5,fontSize=11).encode(
+                        y=alt.Y('shipping_line:N',sort=top['shipping_line'].tolist()),
+                        x=alt.X('Volume (TEU):Q'),
+                        text='Label:N')
+                    st.altair_chart((plot + labels).properties(height=max(300,len(top)*34)).configure_view(stroke=None),
+                                    use_container_width=True)
+                else:
+                    st.info('Belum ada shipping line untuk Top 10.')
+            with right:
+                st.markdown('**All Shipping Lines · Detail**')
+                detail = lines.rename(columns={'shipping_line':'Shipping Line'}).copy()
                 centered_dataframe(
-                    rank_display.rename(columns={'shipping_line': 'Shipping Line', 'TEUs': 'Volume (TEU)'}),
-                    hide_index=True,
-                    use_container_width=True,
-                    height=340,
-                    column_config={
-                        'Rank': st.column_config.NumberColumn('#', format='%d', width='small'),
-                        'Shipping Line': st.column_config.TextColumn('Shipping Line', width='medium'),
-                        'Volume (TEU)': st.column_config.NumberColumn('Volume (TEU)', format='%,.2f', width='medium'),
-                    },
-                )
-        else: st.info('Belum ada data ranking.')
-    else: st.info('Belum ada data ranking Shipping Line.')
+                    detail[['Shipping Line','Volume (TEU)','Contribution (%)']].style.format(
+                        {'Volume (TEU)':'{:,.0f}','Contribution (%)':'{:.2f}%'}),
+                    hide_index=True,use_container_width=True,height=355)
+                st.caption(f"Total detail: {total_detail:,.0f} TEU · 100%")
+            if ytd_volume is not None and abs(total_detail-ytd_volume)>0.01:
+                st.warning(f'Reconciliation: shipping-line detail {total_detail:,.2f} vs {ytd_source} {ytd_volume:,.2f} TEU.')
+        else:
+            st.info('Volume shipping line belum diisi.')
+    else:
+        st.info('Belum ada data Shipping Line YTD untuk bulan ini.')
 
     section('Gross Crane Rate & Vessel Operating Rate', f'Operational Performance · {year}')
     if not operational.empty:
