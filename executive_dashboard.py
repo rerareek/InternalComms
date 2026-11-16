@@ -2,6 +2,7 @@
 No cached snapshots, no writes, and no hard-coded KPI values.
 """
 from datetime import date
+from html import escape
 import pandas as pd
 import altair as alt
 import streamlit as st
@@ -63,6 +64,48 @@ def section(title, description=None):
     st.subheader(title)
     if description:
         st.caption(description)
+
+
+def render_kpi_cards(items):
+    """Responsive, accessible executive KPI cards; values are passed from live queries."""
+    st.markdown("""<style>
+    .jict-kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px;margin:8px 0 24px}
+    .jict-kpi{position:relative;overflow:hidden;border:1px solid rgba(128,145,166,.22);
+      border-radius:16px;padding:18px 18px 16px;background:var(--secondary-background-color,#f8fafc);
+      min-height:150px;box-shadow:0 4px 16px rgba(17,24,39,.045)}
+    .jict-kpi:before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:var(--kpi-accent)}
+    .jict-kpi .kpi-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+    .jict-kpi .kpi-label{font-size:.78rem;font-weight:650;letter-spacing:.01em;opacity:.78;line-height:1.4}
+    .jict-kpi .kpi-icon{font-size:1.15rem;opacity:.9}
+    .jict-kpi .kpi-value{font-size:clamp(1.3rem,2vw,1.95rem);font-weight:760;line-height:1.25;
+      letter-spacing:-.035em;margin:17px 0 7px;overflow-wrap:anywhere;color:var(--text-color,#172033)}
+    .jict-kpi .kpi-unit{font-size:.76rem;font-weight:550;opacity:.65;letter-spacing:0}
+    .jict-kpi .kpi-note{font-size:.74rem;opacity:.7;line-height:1.35}
+    .jict-kpi .kpi-trend{font-size:.74rem;font-weight:700;color:var(--kpi-accent)}
+    @media(max-width:1100px){.jict-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media(max-width:560px){.jict-kpi-grid{grid-template-columns:minmax(0,1fr)}}
+    </style>""",unsafe_allow_html=True)
+    blocks=[]
+    for item in items:
+        label,value,unit,note,icon,accent=item
+        blocks.append(
+            f'<div class="jict-kpi" style="--kpi-accent:{accent}">'
+            f'<div class="kpi-top"><span class="kpi-label">{escape(label)}</span>'
+            f'<span class="kpi-icon" aria-hidden="true">{icon}</span></div>'
+            f'<div class="kpi-value">{escape(value)} <span class="kpi-unit">{escape(unit)}</span></div>'
+            f'<div class="kpi-note">{escape(note)}</div></div>'
+        )
+    st.markdown('<div class="jict-kpi-grid">'+''.join(blocks)+'</div>',unsafe_allow_html=True)
+
+
+def growth_display(value):
+    if value is None or pd.isna(value):
+        return '—', 'No comparison available', '#64748b'
+    if value > 0:
+        return f'+{value:,.2f}%', '▲ Increase vs baseline', '#15956c'
+    if value < 0:
+        return f'{value:,.2f}%', '▼ Decrease vs baseline', '#db5b53'
+    return '0.00%', 'No change vs baseline', '#64748b'
 
 
 def render(sb):
@@ -153,15 +196,17 @@ def render(sb):
     ytd_volume=pair_total(ytd_official,'2026') if ytd_row is not None else pair_total(ytd,'2026')
 
     st.markdown('### Performance at a Glance')
-    cards=st.columns(4)
-    cards[0].metric('Forecast 2026',fmt(forecast,' TEU'))
-    cards[1].metric('Budget 2026',fmt(annual_budget26,' TEU'))
-    cards[2].metric('Actual 2025',fmt(actual25,' TEU'))
-    cards[3].metric('Growth 2026 vs 2025',fmt(pct(forecast,actual25),'%',2))
-    cards=st.columns(3)
-    cards[0].metric('Growth vs Budget 2026',fmt(pct(forecast,annual_budget26),'%',2))
-    cards[1].metric(f'YTD {MONTHS[month-1]} {year} Volume',fmt(ytd_volume,' TEU'))
-    cards[2].metric(f'JICT Market Share {year}',fmt(ms,'%',2))
+    yoy_val, yoy_note, yoy_color = growth_display(pct(forecast,actual25))
+    budget_val, budget_note, budget_color = growth_display(pct(forecast,annual_budget26))
+    render_kpi_cards([
+        ('Forecast 2026',fmt(forecast),'TEU','Full-year projected volume','◈','#2563eb'),
+        ('Budget 2026',fmt(annual_budget26),'TEU','Full-year target','◎','#7c3aed'),
+        ('Actual 2025',fmt(actual25),'TEU','Previous-year actual','▥','#0891b2'),
+        ('Growth 2026 vs 2025',yoy_val,'',yoy_note,'↗',yoy_color),
+        ('Growth vs Budget 2026',budget_val,'',budget_note,'↗',budget_color),
+        (f'YTD {MONTHS[month-1]} {year} Volume',fmt(ytd_volume),'TEU',f'January–{MONTHS[month-1]} {year} · {ytd_source}','▤','#0f766e'),
+        (f'JICT Market Share {year}',fmt(ms,digits=2),'%',f'Tanjung Priok · YTD {MONTHS[month-1]}','◉','#d97706'),
+    ])
     if year != 2026:
         st.info('Annual Forecast 2026 / Budget 2026 / Actual 2025 cards and YTD shipping-line year columns are designed for 2026. Select 2026 for the intended comparison.')
 
