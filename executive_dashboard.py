@@ -290,11 +290,10 @@ def render(sb):
     else:
         st.info('Belum ada data Throughput vs Budget.')
 
-    section(f'Tanjung Priok Market Share · YTD {MONTHS[month-1]} {year}',
-            'Terminal throughput: JICT, TPK KOJA, MAL, TO3, NPCT1')
+    # One consolidated market-share overview: current KPIs + YoY donuts + compact comparison.
+    section(f'Tanjung Priok Market Share Overview · YTD {MONTHS[month-1]} {year}',
+            f'Current market position and {year-1} vs {year} comparison · same YTD cutoff')
     if tp_total:
-        # A single aligned KPI row prevents the tall stack of st.metric widgets
-        # from leaving a large empty region beside the market-share donut.
         share_cards = [
             ('Total Tanjung Priok', fmt(tp_total), 'TEU', f'Combined terminal throughput · YTD {MONTHS[month-1]}', '▦', '#2563eb'),
             ('JICT Throughput', fmt(jict), 'TEU', f'JICT volume · YTD {MONTHS[month-1]}', '▥', '#0d9488'),
@@ -322,28 +321,10 @@ def render(sb):
                 f'<div class="jict-share-note">{escape(note)}</div></div>'
             )
         st.markdown('<div class="jict-share-grid">'+''.join(cards_html)+'</div>', unsafe_allow_html=True)
-
-        left, right = st.columns([1.05, 1], gap='medium', vertical_alignment='top')
-        with left:
-            st.markdown('**Terminal Breakdown · YTD TEU**')
-            breakdown = current_term.rename(columns={'terminal':'Terminal','value':'YTD TEU'}).copy()
-            breakdown['Share (%)'] = breakdown['YTD TEU'] / tp_total * 100
-            breakdown['YTD TEU'] = breakdown['YTD TEU'].map(lambda v: f'{v:,.0f}')
-            breakdown['Share (%)'] = breakdown['Share (%)'].map(lambda v: f'{v:.2f}%')
-            st.dataframe(breakdown, hide_index=True, use_container_width=True, height=260)
-        with right:
-            st.markdown('**Market Share Distribution**')
-            pie = alt.Chart(current_term).mark_arc(innerRadius=75, outerRadius=116).encode(
-                theta=alt.Theta('value:Q'),
-                color=alt.Color('terminal:N', title='Terminal', sort=TERMINALS),
-                tooltip=[alt.Tooltip('terminal:N', title='Terminal'), alt.Tooltip('value:Q', title='YTD TEU', format=',.0f')]
-            ).properties(height=260)
-            st.altair_chart(pie, use_container_width=True)
     else:
         st.info('Belum ada data market share untuk periode ini.')
 
-    section(f'Market Share Tanjung Priok · {year-1} vs {year}',
-            f'Year-over-year terminal composition · January–{MONTHS[month-1]} for both years')
+    st.markdown(f'**Terminal Market Share · {year-1} vs {year}**')
     share_parts = []
     for yr, frame in [(year-1, prev_term), (year, current_term)]:
         if not frame.empty and frame['value'].sum() > 0:
@@ -414,13 +395,15 @@ def render(sb):
                         f'{year-1} Share': share_old,
                         f'{year} TEU': vol_new,
                         f'{year} Share': share_new,
+                        'Change (pp)': share_new - share_old,
                     })
                 compact_rows.append({
                     'Terminal': 'TOTAL',
                     f'{year-1} TEU': float(combined.loc[combined['Year'].eq(prev_col), 'value'].sum()),
-                    f'{year-1} Share': 1.0,
+                    f'{year-1} Share': 100.0,
                     f'{year} TEU': float(combined.loc[combined['Year'].eq(now_col), 'value'].sum()),
-                    f'{year} Share': 1.0,
+                    f'{year} Share': 100.0,
+                    'Change (pp)': 0.0,
                 })
                 st.markdown("**Terminal share · detailed figures**")
                 st.dataframe(
@@ -434,6 +417,7 @@ def render(sb):
                         f'{year-1} Share': st.column_config.NumberColumn(f'{year-1} %', format='%.2f%%'),
                         f'{year} TEU': st.column_config.NumberColumn(f'{year} TEU', format='%,.0f'),
                         f'{year} Share': st.column_config.NumberColumn(f'{year} %', format='%.2f%%'),
+                        'Change (pp)': st.column_config.NumberColumn('Δ pp', format='%+.2f'),
                     },
                 )
         else:
