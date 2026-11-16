@@ -281,7 +281,7 @@ MENU_SERVICE = "🚢 Throughput Per Service"
 MENU_SHIPPING_COMPARE = "📈 Throughput & Compare Shipping Line"
 MENU_YTD_SHIPPING = "📦 YTD Throughput by Shipping Lines"
 MENU_OPERATIONAL = "📊 Operational Performance"
-MENU_CONTRACT = "📄 Incentive & Contract Update"
+MENU_CONTRACT = "📄 Profilling Incentives & Contract Update"
 # Sidebar styling — navigation only, existing page logic unchanged.
 st.markdown("""<style>
 section[data-testid="stSidebar"] {background: linear-gradient(165deg,#101d32 0%,#182d46 65%,#183d49 100%);}

@@ -22,7 +22,7 @@ def load():
     return pd.DataFrame(response.data or [])
 
 def render_contract_update():
-    st.title("Incentive & Contract Update")
+    st.title("Profilling Incentives & Contract Update")
     st.caption("Editable contract and incentive tracker · changes persist in Supabase after Save.")
     try:
         original = load()

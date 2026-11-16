@@ -1,0 +1,1 @@
+Changes: Sidebar and page title renamed to Profilling Incentives & Contract Update. Profiling Incentives read-only summary, benefit and tariff tables use centered HTML rendering (first column left aligned). IDR/USD tariff comma formatting preserved. Editable st.data_editor tables unchanged: native Streamlit editor does not offer reliable per-cell alignment. No AG Grid dependency.

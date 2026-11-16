@@ -57,6 +57,22 @@ def _editor(df, table, cols, key, numeric=(), height=360, required=()):
             st.success('Saved to Supabase.');st.rerun()
         except Exception as e:st.error(f'Save failed: {e}')
 
+
+def _centered_table(frame):
+    """Read-only table with reliably centered headings and values, left-aligned first column."""
+    import html
+    view = frame.copy().fillna('—')
+    css = """<style>
+    .jict-centered {overflow-x:auto; margin:0.4rem 0 1rem;}
+    .jict-centered table {border-collapse:collapse;width:100%;font-size:0.9rem;}
+    .jict-centered th,.jict-centered td {text-align:center!important;padding:9px 12px;border-bottom:1px solid rgba(128,128,128,.25);white-space:nowrap;}
+    .jict-centered th:first-child,.jict-centered td:first-child {text-align:left!important;}
+    .jict-centered th {background:rgba(128,128,128,.10);font-weight:650;}
+    </style>"""
+    headers = ''.join('<th>'+html.escape(str(c))+'</th>' for c in view.columns)
+    body = ''.join('<tr>'+''.join('<td>'+html.escape(str(v))+'</td>' for v in row)+'</tr>' for row in view.itertuples(index=False,name=None))
+    st.markdown(css+'<div class="jict-centered"><table><thead><tr>'+headers+'</tr></thead><tbody>'+body+'</tbody></table></div>',unsafe_allow_html=True)
+
 def render():
     st.subheader('Profiling Incentives')
     st.caption('Shipping line incentives · Seaside revenue · Rebate · Tariff reference')
@@ -90,7 +106,7 @@ def render():
             ).properties(height=max(280,len(chart)*32)),use_container_width=True)
             st.markdown('#### Incentive Profile Summary')
             summary=profiles[['shipping_line','volume_teu','seaside_revenue_usd','rebate_usd','rebate_pct']].copy()
-            st.dataframe(summary.rename(columns={'shipping_line':'Shipping Line','volume_teu':'Volume (TEU)','seaside_revenue_usd':'Seaside Revenue (USD)','rebate_usd':'Rebate (USD)','rebate_pct':'Rebate (%)'}),hide_index=True,use_container_width=True)
+            _centered_table(summary.rename(columns={'shipping_line':'Shipping Line','volume_teu':'Volume (TEU)','seaside_revenue_usd':'Seaside Revenue (USD)','rebate_usd':'Rebate (USD)','rebate_pct':'Rebate (%)'}))
     with detail:
         if not profiles.empty:
             options={f"{r['shipping_line']} · {r['profile_id']}":r['profile_id'] for _,r in profiles.iterrows()}
@@ -109,14 +125,23 @@ def render():
                 rows=selected[selected['category'].str.casefold().eq(group.casefold())] if not selected.empty else pd.DataFrame()
                 if rows.empty:st.caption('No entries recorded.')
                 else:
-                    st.dataframe(rows[['description','discount_text','amount_usd','amount_note']].rename(columns={'description':'Benefit / Incentive','discount_text':'Discount','amount_usd':'Amount (USD)','amount_note':'Source Note'}),hide_index=True,use_container_width=True)
+                    _centered_table(rows[['description','discount_text','amount_usd','amount_note']].rename(columns={'description':'Benefit / Incentive','discount_text':'Discount','amount_usd':'Amount (USD)','amount_note':'Source Note'}))
     with tariff_tab:
         st.caption('Tariffs are reference rates, separate from incentive amounts. Currency is shown explicitly.')
         if not tariffs.empty:
             for curr in ['USD','IDR']:
                 st.markdown('#### '+curr+' Tariffs')
                 rows=tariffs[tariffs['currency'].eq(curr)]
-                if not rows.empty:st.dataframe(rows[['category','description','rate_20','rate_40']].rename(columns={'category':'Category','description':'Description','rate_20':"20'",'rate_40':"40'"}),hide_index=True,use_container_width=True)
+                if not rows.empty:
+                    display_rows = rows[['category', 'description', 'rate_20', 'rate_40']].copy()
+                    for rate_col in ['rate_20', 'rate_40']:
+                        display_rows[rate_col] = display_rows[rate_col].map(
+                            lambda value: f"{float(value):,.0f}" if pd.notna(value) and str(value).strip() != '' else '—'
+                        )
+                    _centered_table(
+                        display_rows.rename(columns={'category': 'Category', 'description': 'Description', 'rate_20': "20'", 'rate_40': "40'"}),
+                        
+                    )
     with edit:
         st.info('Editable source records. Changes take effect after Save. Deleting a profile also deletes its linked incentive details.')
         t1,t2,t3=st.tabs(['Profiles','Incentive Items','Tariff Rates'])
