@@ -110,6 +110,28 @@ def growth_display(value):
     return '0.00%', 'No change vs baseline', '#64748b'
 
 
+
+def _operational_ytd_table(data, cutoff, measure, mode="average"):
+    """Monthly series with YTD-to-month values; exclude future months."""
+    if data.empty:
+        st.info("Belum ada data YTD.")
+        return
+    base = data.loc[data["month"].le(cutoff), ["month", "Series", measure]].copy()
+    base[measure] = pd.to_numeric(base[measure], errors="coerce")
+    base = base.dropna(subset=[measure]).sort_values(["Series", "month"])
+    if base.empty:
+        st.info("Belum ada data sampai bulan terpilih.")
+        return
+    if mode == "average":
+        base["YTD"] = base.groupby("Series")[measure].transform(lambda x: x.expanding().mean())
+    else:
+        base["YTD"] = base.groupby("Series")[measure].cumsum()
+    base["Month"] = base["month"].astype(int).map(dict(enumerate(MONTHS, 1)))
+    view = base[["Month", "Series", "YTD"]].copy()
+    view["YTD"] = view["YTD"].map(lambda x: f"{x:,.2f}" if mode == "average" else f"{x:,.0f}")
+    st.caption(f"Jan–{MONTHS[cutoff-1]} · YTD {'average' if mode == 'average' else 'cumulative total'}")
+    centered_dataframe(view, hide_index=True, use_container_width=True, height=310)
+
 def render(sb):
     st.markdown('''<style>
     .jict-section-divider{height:1px;background:linear-gradient(90deg,transparent 0%,rgba(100,116,139,.38) 12%,rgba(100,116,139,.38) 88%,transparent 100%);margin:38px 0 27px}
@@ -483,7 +505,12 @@ def render(sb):
         if not op.empty:
             op['Month']=op['month'].astype(int).map(dict(enumerate(MONTHS,1)))
             op=op.rename(columns={'metric':'Series','value':'Rate'})
-            st.altair_chart(chart(op,y='Rate',order=MONTHS),use_container_width=True)
+            left,right=st.columns([2.1,1],gap='medium')
+            with left:
+                st.altair_chart(chart(op,y='Rate',order=MONTHS),use_container_width=True)
+            with right:
+                st.markdown('**Monthly YTD · GCR / VOR**')
+                _operational_ytd_table(op,month,'Rate',mode='average')
             a,b=st.columns(2)
             for col,name in zip([a,b],['Gross QC Rate','Vess. Op. Rate']):
                 vals=op.loc[op['Series'].eq(name)&op['month'].le(month),'Rate']
@@ -497,7 +524,12 @@ def render(sb):
         if not dwell.empty:
             dwell['Month']=dwell['month'].astype(int).map(dict(enumerate(MONTHS,1)))
             dwell=dwell.rename(columns={'metric':'Series','value':'Days'})
-            st.altair_chart(chart(dwell,y='Days',order=MONTHS),use_container_width=True)
+            left,right=st.columns([2.1,1],gap='medium')
+            with left:
+                st.altair_chart(chart(dwell,y='Days',order=MONTHS),use_container_width=True)
+            with right:
+                st.markdown('**Monthly YTD · Dwelling Time**')
+                _operational_ytd_table(dwell,month,'Days',mode='average')
             cols=st.columns(3)
             for col,name in zip(cols,['Import Full','Export Full','Overall']):
                 vals=dwell.loc[dwell['Series'].eq(name)&dwell['month'].le(month),'Days']
@@ -511,8 +543,15 @@ def render(sb):
         for c in ['to_koja','from_koja']: d[c]=num(d,c).fillna(0)
         d=d.groupby('month',as_index=False)[['to_koja','from_koja']].sum()
         d['Month']=d['month'].astype(int).map(dict(enumerate(MONTHS,1)))
-        d=d.melt(id_vars='Month',value_vars=['to_koja','from_koja'],var_name='Series',value_name='TEUs')
-        if not d.empty: st.altair_chart(chart(d,kind='bar',order=MONTHS),use_container_width=True)
+        d=d.melt(id_vars=['month','Month'],value_vars=['to_koja','from_koja'],var_name='Series',value_name='TEUs')
+        d['Series']=d['Series'].map({'to_koja':'To Koja','from_koja':'From Koja'})
+        if not d.empty:
+            left,right=st.columns([2.1,1],gap='medium')
+            with left:
+                st.altair_chart(chart(d,kind='bar',order=MONTHS),use_container_width=True)
+            with right:
+                st.markdown('**Monthly YTD · Divert (TEU)**')
+                _operational_ytd_table(d,month,'TEUs',mode='sum')
     else: st.info('Belum ada data Divert.')
 
     st.caption('Data sources: throughput_budget_2526 · throughput · throughput_shipping_official_kpi · ytd_shipping_lines · ytd_shipping_official_totals · operational_monthly_metrics · operational_divert. All charts use calendar month order. Missing values are not silently replaced with forecasts.')
