@@ -1,3 +1,4 @@
+from centered_tables import centered_dataframe
 """YTD Throughput by Shipping Lines — independent CRM menu."""
 import io
 import pandas as pd
@@ -103,7 +104,7 @@ def _display(df,kind):
         return 'background-color: #E8EEF4; color: #1E293B; font-weight: 700;'
     styled = (view.style.format(fmt,na_rep='—')
               .apply_index(lambda columns: [year_header_colors(c) for c in columns], axis='columns'))
-    st.dataframe(styled,use_container_width=True,hide_index=True)
+    centered_dataframe(styled,use_container_width=True,hide_index=True)
     csv=view.to_csv(index=False).encode('utf-8-sig')
     st.download_button('Download detailed CSV',csv,file_name=f'ytd_{kind.replace(" / ","_").lower()}.csv',mime='text/csv',key=f'ytd_dl_{kind}')
 
@@ -201,7 +202,7 @@ def _reconcile(rows, official):
         detail=_sum(df,db)
         target=float(off.get(db) or 0)
         checks.append({'Metric':label,'Official':target,'Detail Sum':detail,'Variance':detail-target,'Status':'Matched' if abs(detail-target)<0.01 else 'Mismatch'})
-    st.dataframe(pd.DataFrame(checks),hide_index=True,use_container_width=True,column_config={'Official':st.column_config.NumberColumn(format='%.2f'),'Detail Sum':st.column_config.NumberColumn(format='%.2f'),'Variance':st.column_config.NumberColumn(format='%+.2f')})
+    centered_dataframe(pd.DataFrame(checks),hide_index=True,use_container_width=True,column_config={'Official':st.column_config.NumberColumn(format='%.2f'),'Detail Sum':st.column_config.NumberColumn(format='%.2f'),'Variance':st.column_config.NumberColumn(format='%+.2f')})
     if any(c['Status']=='Mismatch' for c in checks):
         st.warning('Detail totals differ from official figures. Check the source spreadsheet and missing/duplicate lines; no automatic adjustment was applied.')
     else: st.success('All 8 components match the official totals.')

@@ -1,3 +1,4 @@
+from centered_tables import centered_dataframe
 """Shipping Data Maintenence — editable shipping service master data."""
 import pandas as pd
 import streamlit as st
@@ -42,7 +43,7 @@ def render():
             shown=shown.loc[mask]
         if berth!='All':
             shown=shown.loc[shown['berth'].str.upper().eq(berth)]
-        st.dataframe(shown.rename(columns=LABELS),hide_index=True,use_container_width=True,height=530,
+        centered_dataframe(shown.rename(columns=LABELS),hide_index=True,use_container_width=True,height=530,
                      column_config={'NO':st.column_config.NumberColumn('NO',format='%d')})
         st.download_button('Download Excel-compatible CSV',shown.rename(columns=LABELS).to_csv(index=False).encode('utf-8-sig'),
                            file_name='shipping_data_maintenance.csv',mime='text/csv')

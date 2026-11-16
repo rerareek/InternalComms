@@ -1,3 +1,4 @@
+from centered_tables import centered_dataframe
 """Throughput Per Service — dashboard and manual / Excel clipboard entry."""
 import io
 import re
@@ -154,7 +155,7 @@ def dashboard(data):
     st.subheader('Service Details')
     details = filtered.groupby(['service_name','ship_line'], as_index=False)[['calls','local_volume','ts_volume','total']].sum()
     details.columns = ['Service Name','Ship Line','Call','Local','TS','Total']
-    st.dataframe(details, use_container_width=True, hide_index=True)
+    centered_dataframe(details, use_container_width=True, hide_index=True)
     st.download_button('Download CSV', details.to_csv(index=False).encode('utf-8-sig'),
                        'throughput_per_service.csv', 'text/csv')
     st.subheader('Monthly Summary')
@@ -162,7 +163,7 @@ def dashboard(data):
                .groupby('month')[['calls','local_volume','ts_volume','total']].sum().reindex(range(1,13), fill_value=0))
     monthly.index = MONTHS
     monthly.index.name = 'Month'
-    st.dataframe(monthly.rename(columns={'calls':'Call','local_volume':'Local','ts_volume':'TS','total':'Total'}),
+    centered_dataframe(monthly.rename(columns={'calls':'Call','local_volume':'Local','ts_volume':'TS','total':'Total'}),
                  use_container_width=True)
     st.subheader('Throughput Per Service — Full Year Detail')
     st.caption('Format seperti Excel: Service Name → Ship Line, Jan–Dec (Call / Local / TS / Total), subtotal per service, dan Grand Total. Geser tabel ke kanan untuk melihat bulan berikutnya.')
@@ -182,7 +183,7 @@ def dashboard(data):
         styled_matrix = (display_matrix.style
                          .format('{:,.0f}', subset=display_matrix.columns[2:])
                          .apply(highlight_totals, axis=1))
-        st.dataframe(styled_matrix, use_container_width=True, height=520,
+        centered_dataframe(styled_matrix, use_container_width=True, height=520,
                      hide_index=True)
         export = matrix.copy()
         export.index = pd.MultiIndex.from_tuples(export.index, names=['Service Name', 'Ship Line'])
@@ -411,7 +412,7 @@ def bulk_input(sb):
         preview['Month'] = preview['Month'].map(lambda m: MONTHS[m-1])
         preview['Total'] = preview['Local'] + preview['TS']
         st.markdown(f'**Preview: {len(records)} record bulanan dari {preview["Service Name"].nunique()} service**')
-        st.dataframe(preview[['Service Name','Ship Line','Month','Call','Local','TS','Total']],
+        centered_dataframe(preview[['Service Name','Ship Line','Month','Call','Local','TS','Total']],
                      hide_index=True, use_container_width=True, height=300)
     st.caption('Baris kosong dan subtotal dilewati. Service Name kosong mengikuti service sebelumnya. Save akan update data dengan Year + Month + Service + Ship Line yang sama tanpa menghapus record lain.')
     if st.button(f'Save {len(records)} Records to Supabase', type='primary',

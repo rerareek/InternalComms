@@ -1,3 +1,4 @@
+from centered_tables import centered_dataframe
 """Executive Dashboard for JICT CRM. Reads the same live Supabase tables as source menus.
 No cached snapshots, no writes, and no hard-coded KPI values.
 """
@@ -275,7 +276,7 @@ def render(sb):
                     for metric, v in zip(display['Metric'], display[month_label])
                 ]
             st.caption('Monthly throughput and YoY / budget changes · Total growth is calculated from annual totals, not monthly percentage averages.')
-            st.dataframe(formatted, hide_index=True, use_container_width=True)
+            centered_dataframe(formatted, hide_index=True, use_container_width=True)
             with st.expander('Percentage change by month', expanded=False):
                 change_long = table.loc[MONTHS, ['Change (%) 2026 vs 2025', 'Change (%) 2026 vs Budget']].reset_index().rename(columns={'Month': 'Month'})
                 change_long = change_long.rename(columns={'index': 'Month'}).melt(id_vars='Month', var_name='Comparison', value_name='Change (%)').dropna()
@@ -406,7 +407,7 @@ def render(sb):
                     'Change (pp)': 0.0,
                 })
                 st.markdown("**Terminal share · detailed figures**")
-                st.dataframe(
+                centered_dataframe(
                     pd.DataFrame(compact_rows),
                     hide_index=True,
                     use_container_width=True,
@@ -436,7 +437,7 @@ def render(sb):
             with p1:
                 st.altair_chart(alt.Chart(lines).mark_arc(innerRadius=65).encode(theta='TEUs:Q',color=alt.Color('shipping_line:N',title='Shipping Line'),tooltip=['shipping_line:N',alt.Tooltip('TEUs:Q',format=',.0f'),alt.Tooltip('Share (%):Q',format='.2f')]).properties(height=330),use_container_width=True)
             with p2:
-                st.dataframe(lines.rename(columns={'shipping_line':'Shipping Line'}).style.format({'TEUs':'{:,.0f}','Share (%)':'{:.2f}%'}),hide_index=True,use_container_width=True,height=330)
+                centered_dataframe(lines.rename(columns={'shipping_line':'Shipping Line'}).style.format({'TEUs':'{:,.0f}','Share (%)':'{:.2f}%'}),hide_index=True,use_container_width=True,height=330)
             if ytd_volume is not None and abs(lines['TEUs'].sum()-ytd_volume)>0.01:
                 st.warning(f'Reconciliation: total shipping-line detail {lines["TEUs"].sum():,.2f} vs {ytd_source} {ytd_volume:,.2f} TEU.')
         else: st.info('Volume shipping line belum diisi.')
@@ -462,7 +463,7 @@ def render(sb):
                 ).properties(height=340),use_container_width=True)
             with table_col:
                 st.markdown('**Top 10 · Volume Detail**')
-                st.dataframe(
+                centered_dataframe(
                     rank_display.rename(columns={'shipping_line': 'Shipping Line', 'TEUs': 'Volume (TEU)'}),
                     hide_index=True,
                     use_container_width=True,
