@@ -114,6 +114,14 @@ def render(sb):
     .jict-section-divider{height:1px;background:linear-gradient(90deg,transparent 0%,rgba(100,116,139,.38) 12%,rgba(100,116,139,.38) 88%,transparent 100%);margin:38px 0 27px}
     .jict-comparison-heading{font-size:.9rem;font-weight:700;margin:4px 0 0}
     .jict-comparison-caption{font-size:.78rem;opacity:.7;margin-bottom:9px}
+
+    .jict-mini-wrap{border:1px solid rgba(100,116,139,.25);border-radius:13px;padding:10px 12px;background:var(--secondary-background-color,#f8fafc);overflow-x:auto;margin:8px 0 16px}
+    .jict-mini-title{font-size:.78rem;font-weight:700;margin-bottom:6px;opacity:.85}
+    .jict-mini-table{width:100%;border-collapse:collapse;font-size:.74rem;font-variant-numeric:tabular-nums;white-space:nowrap}
+    .jict-mini-table th,.jict-mini-table td{padding:4px 7px;border-bottom:1px solid rgba(100,116,139,.14);text-align:right}
+    .jict-mini-table th:first-child,.jict-mini-table td:first-child{text-align:left}
+    .jict-mini-table thead th{font-weight:700;color:inherit;opacity:.85}
+    .jict-mini-table .jict-mini-total td{font-weight:800;border-top:1px solid rgba(100,116,139,.3);border-bottom:0}
     .jict-share-delta{border:1px solid rgba(100,116,139,.25);border-radius:13px;padding:12px 15px;margin:8px 0 16px;background:var(--secondary-background-color,#f8fafc)}
     .jict-share-delta-label{font-size:.78rem;opacity:.75}
     .jict-share-delta-value{font-size:1.45rem;font-weight:750;margin:3px 0}
@@ -372,25 +380,6 @@ def render(sb):
                 subtitle = alt.Chart(pd.DataFrame({'label':['JICT SHARE']})).mark_text(
                     fontSize=10,dy=18,color='#64748b').encode(text='label:N')
                 st.altair_chart((arc + center + subtitle).properties(height=300),use_container_width=True)
-                # Always-visible figures below each donut; no hover required.
-                details = d[['terminal', 'value', 'Share (%)']].copy()
-                details = details.rename(columns={'terminal': 'Terminal', 'value': 'YTD Volume (TEU)'})
-                details['Terminal'] = pd.Categorical(details['Terminal'], categories=TERMINALS, ordered=True)
-                details = details.sort_values('Terminal').reset_index(drop=True)
-                total_row = pd.DataFrame([{'Terminal': 'TOTAL', 'YTD Volume (TEU)': total,
-                                           'Share (%)': 100.0}])
-                details['Terminal'] = details['Terminal'].astype(str)
-                details = pd.concat([details, total_row], ignore_index=True)
-                st.dataframe(
-                    details.style.format({'YTD Volume (TEU)': '{:,.0f}',
-                                          'Share (%)': '{:.2f}%'}).apply(
-                        lambda row: ['font-weight: 700; background-color: rgba(128,145,166,0.12)'] * len(row)
-                        if row['Terminal'] == 'TOTAL' else [''] * len(row), axis=1),
-                    hide_index=True, use_container_width=True,
-                    column_config={'Terminal': st.column_config.TextColumn('Terminal'),
-                                   'YTD Volume (TEU)': st.column_config.NumberColumn('YTD Volume (TEU)'),
-                                   'Share (%)': st.column_config.NumberColumn('Market Share (%)')}
-                )
         # Comparison table highlights movement in percentage points, not volume growth.
         pivot = combined.pivot_table(index='terminal', columns='Year', values='Share (%)', aggfunc='sum')
         prev_col, now_col = str(year-1), str(year)
@@ -398,15 +387,32 @@ def render(sb):
             pivot = pivot.reindex(TERMINALS).dropna(how='all').fillna(0)
             pivot['Change (pp)'] = pivot[now_col] - pivot[prev_col]
             jict_delta = float(pivot.loc['JICT','Change (pp)']) if 'JICT' in pivot.index else None
-            if jict_delta is not None:
-                sign = '+' if jict_delta > 0 else ''
-                direction = '▲' if jict_delta > 0 else ('▼' if jict_delta < 0 else '●')
-                color = '#15956c' if jict_delta > 0 else ('#db5b53' if jict_delta < 0 else '#64748b')
-                st.markdown(f'<div class="jict-share-delta"><div class="jict-share-delta-label">JICT market share movement · {year-1} → {year}</div><div class="jict-share-delta-value" style="color:{color}">{direction} {sign}{jict_delta:.2f} pp</div><div class="jict-share-delta-label">Percentage-point change at the same YTD cutoff</div></div>',unsafe_allow_html=True)
-            st.markdown('**Market share by terminal · Year-over-year**')
-            compare = pivot.reset_index().rename(columns={'terminal':'Terminal',prev_col:f'{year-1} Share (%)',now_col:f'{year} Share (%)'})
-            st.dataframe(compare.style.format({f'{year-1} Share (%)':'{:.2f}%',f'{year} Share (%)':'{:.2f}%','Change (pp)':'{:+.2f} pp'}),
-                         hide_index=True,use_container_width=True)
+            # Compact side-by-side movement KPI and always-visible terminal figures.
+            movement_col, figures_col = st.columns([1, 2.15], gap='medium')
+            with movement_col:
+                if jict_delta is not None:
+                    sign = '+' if jict_delta > 0 else ''
+                    direction = '▲' if jict_delta > 0 else ('▼' if jict_delta < 0 else '●')
+                    color = '#15956c' if jict_delta > 0 else ('#db5b53' if jict_delta < 0 else '#64748b')
+                    st.markdown(f'<div class="jict-share-delta"><div class="jict-share-delta-label">JICT market share movement · {year-1} → {year}</div><div class="jict-share-delta-value" style="color:{color}">{direction} {sign}{jict_delta:.2f} pp</div><div class="jict-share-delta-label">Percentage-point change at the same YTD cutoff</div></div>', unsafe_allow_html=True)
+            with figures_col:
+                # Two compact columns per year, no scrolling or hover needed.
+                volume_pivot = combined.pivot_table(index='terminal', columns='Year', values='value', aggfunc='sum')
+                rows_html = []
+                for terminal in TERMINALS:
+                    vol_old = float(volume_pivot.loc[terminal, prev_col]) if terminal in volume_pivot.index and prev_col in volume_pivot and pd.notna(volume_pivot.loc[terminal, prev_col]) else 0.0
+                    vol_new = float(volume_pivot.loc[terminal, now_col]) if terminal in volume_pivot.index and now_col in volume_pivot and pd.notna(volume_pivot.loc[terminal, now_col]) else 0.0
+                    share_old = float(pivot.loc[terminal, prev_col]) if terminal in pivot.index else 0.0
+                    share_new = float(pivot.loc[terminal, now_col]) if terminal in pivot.index else 0.0
+                    rows_html.append(f'<tr><td>{escape(terminal)}</td><td>{vol_old:,.0f}</td><td>{share_old:.2f}%</td><td>{vol_new:,.0f}</td><td>{share_new:.2f}%</td></tr>')
+                old_total = float(combined.loc[combined['Year'].eq(prev_col), 'value'].sum())
+                new_total = float(combined.loc[combined['Year'].eq(now_col), 'value'].sum())
+                rows_html.append(f'<tr class="jict-mini-total"><td>TOTAL</td><td>{old_total:,.0f}</td><td>100.00%</td><td>{new_total:,.0f}</td><td>100.00%</td></tr>')
+                mini_table = (f'<div class="jict-mini-wrap"><div class="jict-mini-title">Terminal market share · YTD {MONTHS[month-1]}</div>'
+                    f'<table class="jict-mini-table"><thead><tr><th rowspan="2">Terminal</th><th colspan="2">{year-1}</th><th colspan="2">{year}</th></tr>'
+                    '<tr><th>TEU</th><th>Share</th><th>TEU</th><th>Share</th></tr></thead><tbody>'
+                    + ''.join(rows_html) + '</tbody></table></div>')
+                st.markdown(mini_table, unsafe_allow_html=True)
         else:
             st.caption('Perbandingan perubahan market share tersedia setelah kedua tahun memiliki data.')
     else:
