@@ -396,23 +396,46 @@ def render(sb):
                     color = '#15956c' if jict_delta > 0 else ('#db5b53' if jict_delta < 0 else '#64748b')
                     st.markdown(f'<div class="jict-share-delta"><div class="jict-share-delta-label">JICT market share movement · {year-1} → {year}</div><div class="jict-share-delta-value" style="color:{color}">{direction} {sign}{jict_delta:.2f} pp</div><div class="jict-share-delta-label">Percentage-point change at the same YTD cutoff</div></div>', unsafe_allow_html=True)
             with figures_col:
-                # Two compact columns per year, no scrolling or hover needed.
-                volume_pivot = combined.pivot_table(index='terminal', columns='Year', values='value', aggfunc='sum')
-                rows_html = []
+                # Native Streamlit table: reliable across themes/versions, no HTML/CSS dependency.
+                volume_pivot = combined.pivot_table(
+                    index='terminal', columns='Year', values='value', aggfunc='sum'
+                )
+                compact_rows = []
                 for terminal in TERMINALS:
-                    vol_old = float(volume_pivot.loc[terminal, prev_col]) if terminal in volume_pivot.index and prev_col in volume_pivot and pd.notna(volume_pivot.loc[terminal, prev_col]) else 0.0
-                    vol_new = float(volume_pivot.loc[terminal, now_col]) if terminal in volume_pivot.index and now_col in volume_pivot and pd.notna(volume_pivot.loc[terminal, now_col]) else 0.0
+                    if terminal not in pivot.index and terminal not in volume_pivot.index:
+                        continue
+                    vol_old = float(volume_pivot.loc[terminal, prev_col]) if terminal in volume_pivot.index and prev_col in volume_pivot.columns and pd.notna(volume_pivot.loc[terminal, prev_col]) else 0.0
+                    vol_new = float(volume_pivot.loc[terminal, now_col]) if terminal in volume_pivot.index and now_col in volume_pivot.columns and pd.notna(volume_pivot.loc[terminal, now_col]) else 0.0
                     share_old = float(pivot.loc[terminal, prev_col]) if terminal in pivot.index else 0.0
                     share_new = float(pivot.loc[terminal, now_col]) if terminal in pivot.index else 0.0
-                    rows_html.append(f'<tr><td>{escape(terminal)}</td><td>{vol_old:,.0f}</td><td>{share_old:.2f}%</td><td>{vol_new:,.0f}</td><td>{share_new:.2f}%</td></tr>')
-                old_total = float(combined.loc[combined['Year'].eq(prev_col), 'value'].sum())
-                new_total = float(combined.loc[combined['Year'].eq(now_col), 'value'].sum())
-                rows_html.append(f'<tr class="jict-mini-total"><td>TOTAL</td><td>{old_total:,.0f}</td><td>100.00%</td><td>{new_total:,.0f}</td><td>100.00%</td></tr>')
-                mini_table = (f'<div class="jict-mini-wrap"><div class="jict-mini-title">Terminal market share · YTD {MONTHS[month-1]}</div>'
-                    f'<table class="jict-mini-table"><thead><tr><th rowspan="2">Terminal</th><th colspan="2">{year-1}</th><th colspan="2">{year}</th></tr>'
-                    '<tr><th>TEU</th><th>Share</th><th>TEU</th><th>Share</th></tr></thead><tbody>'
-                    + ''.join(rows_html) + '</tbody></table></div>')
-                st.markdown(mini_table, unsafe_allow_html=True)
+                    compact_rows.append({
+                        'Terminal': terminal,
+                        f'{year-1} TEU': vol_old,
+                        f'{year-1} Share': share_old,
+                        f'{year} TEU': vol_new,
+                        f'{year} Share': share_new,
+                    })
+                compact_rows.append({
+                    'Terminal': 'TOTAL',
+                    f'{year-1} TEU': float(combined.loc[combined['Year'].eq(prev_col), 'value'].sum()),
+                    f'{year-1} Share': 1.0,
+                    f'{year} TEU': float(combined.loc[combined['Year'].eq(now_col), 'value'].sum()),
+                    f'{year} Share': 1.0,
+                })
+                st.markdown("**Terminal share · detailed figures**")
+                st.dataframe(
+                    pd.DataFrame(compact_rows),
+                    hide_index=True,
+                    use_container_width=True,
+                    height=284,
+                    column_config={
+                        'Terminal': st.column_config.TextColumn('Terminal', width='small'),
+                        f'{year-1} TEU': st.column_config.NumberColumn(f'{year-1} TEU', format='%,.0f'),
+                        f'{year-1} Share': st.column_config.NumberColumn(f'{year-1} %', format='%.2f%%'),
+                        f'{year} TEU': st.column_config.NumberColumn(f'{year} TEU', format='%,.0f'),
+                        f'{year} Share': st.column_config.NumberColumn(f'{year} %', format='%.2f%%'),
+                    },
+                )
         else:
             st.caption('Perbandingan perubahan market share tersedia setelah kedua tahun memiliki data.')
     else:
