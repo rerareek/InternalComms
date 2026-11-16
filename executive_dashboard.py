@@ -111,26 +111,49 @@ def growth_display(value):
 
 
 
-def _operational_ytd_table(data, cutoff, measure, mode="average"):
-    """Monthly series with YTD-to-month values; exclude future months."""
+def _operational_ytd_table(data, cutoff, measure, series_order, key, mode="average", unit=""):
+    """Compact monthly wide table; the YTD summary uses all months through cutoff."""
     if data.empty:
         st.info("Belum ada data YTD.")
         return
-    base = data.loc[data["month"].le(cutoff), ["month", "Series", measure]].copy()
+    choices = [3, 6, 9, 12]
+    count = st.selectbox(
+        "Show latest months", choices, index=0,
+        format_func=lambda n: f"Last {n} months", key=f"{key}_months",
+    )
+    base = data.loc[data["month"].between(1, cutoff), ["month", "Series", measure]].copy()
     base[measure] = pd.to_numeric(base[measure], errors="coerce")
-    base = base.dropna(subset=[measure]).sort_values(["Series", "month"])
+    base = base.dropna(subset=[measure])
     if base.empty:
         st.info("Belum ada data sampai bulan terpilih.")
         return
-    if mode == "average":
-        base["YTD"] = base.groupby("Series")[measure].transform(lambda x: x.expanding().mean())
-    else:
-        base["YTD"] = base.groupby("Series")[measure].cumsum()
-    base["Month"] = base["month"].astype(int).map(dict(enumerate(MONTHS, 1)))
-    view = base[["Month", "Series", "YTD"]].copy()
-    view["YTD"] = view["YTD"].map(lambda x: f"{x:,.2f}" if mode == "average" else f"{x:,.0f}")
-    st.caption(f"Jan–{MONTHS[cutoff-1]} · YTD {'average' if mode == 'average' else 'cumulative total'}")
-    centered_dataframe(view, hide_index=True, use_container_width=True, height=310)
+    # Summarize duplicates within each month/series, without treating missing values as zero.
+    aggregation = "mean" if mode == "average" else "sum"
+    wide = base.pivot_table(index="month", columns="Series", values=measure, aggfunc=aggregation)
+    wide = wide.reindex(columns=series_order)
+    # A compact window changes only visible monthly rows, never the YTD calculation.
+    start = max(1, cutoff - count + 1)
+    visible = wide.loc[(wide.index >= start) & (wide.index <= cutoff)].copy()
+    if visible.empty:
+        st.info("Tidak ada data untuk rentang bulan ini.")
+        return
+    visible.index = [MONTHS[int(m) - 1] for m in visible.index]
+    visible.index.name = "Month"
+    visible = visible.reset_index()
+    # The YTD (Year) column identifies the reporting period; avoid adding
+    # unrelated series (e.g. dwelling-time categories) into a fabricated total.
+    visible["YTD (Year)"] = ""
+    summary = {"Month": f"YTD Jan–{MONTHS[cutoff-1]}"}
+    for series in series_order:
+        vals = base.loc[base["Series"].eq(series), measure]
+        summary[series] = vals.mean() if mode == "average" and not vals.empty else (vals.sum() if not vals.empty else float('nan'))
+    summary["YTD (Year)"] = str(st.session_state.get("exec_year", ""))
+    visible = pd.concat([visible, pd.DataFrame([summary])], ignore_index=True)
+    for series in series_order:
+        visible[series] = visible[series].map(lambda x: f"{x:,.2f}" if pd.notna(x) and mode == "average" else (f"{x:,.0f}" if pd.notna(x) else "—"))
+    st.caption(f"{unit} · YTD {'monthly average' if mode == 'average' else 'cumulative volume'} through {MONTHS[cutoff-1]}. Last row includes all available months Jan–{MONTHS[cutoff-1]}.")
+    centered_dataframe(visible, hide_index=True, use_container_width=True, height=min(490, 95 + 37 * len(visible)))
+
 
 def render(sb):
     st.markdown('''<style>
@@ -510,7 +533,7 @@ def render(sb):
                 st.altair_chart(chart(op,y='Rate',order=MONTHS),use_container_width=True)
             with right:
                 st.markdown('**Monthly YTD · GCR / VOR**')
-                _operational_ytd_table(op,month,'Rate',mode='average')
+                _operational_ytd_table(op,month,'Rate',['Gross QC Rate','Vess. Op. Rate'],'gcr_vor',mode='average',unit='Rate')
             a,b=st.columns(2)
             for col,name in zip([a,b],['Gross QC Rate','Vess. Op. Rate']):
                 vals=op.loc[op['Series'].eq(name)&op['month'].le(month),'Rate']
@@ -529,7 +552,7 @@ def render(sb):
                 st.altair_chart(chart(dwell,y='Days',order=MONTHS),use_container_width=True)
             with right:
                 st.markdown('**Monthly YTD · Dwelling Time**')
-                _operational_ytd_table(dwell,month,'Days',mode='average')
+                _operational_ytd_table(dwell,month,'Days',['Export Full','Import Full','Overall'],'dwelling',mode='average',unit='Days')
             cols=st.columns(3)
             for col,name in zip(cols,['Import Full','Export Full','Overall']):
                 vals=dwell.loc[dwell['Series'].eq(name)&dwell['month'].le(month),'Days']
@@ -551,7 +574,7 @@ def render(sb):
                 st.altair_chart(chart(d,kind='bar',order=MONTHS),use_container_width=True)
             with right:
                 st.markdown('**Monthly YTD · Divert (TEU)**')
-                _operational_ytd_table(d,month,'TEUs',mode='sum')
+                _operational_ytd_table(d,month,'TEUs',['To Koja','From Koja'],'divert',mode='sum',unit='TEU')
     else: st.info('Belum ada data Divert.')
 
     st.caption('Data sources: throughput_budget_2526 · throughput · throughput_shipping_official_kpi · ytd_shipping_lines · ytd_shipping_official_totals · operational_monthly_metrics · operational_divert. All charts use calendar month order. Missing values are not silently replaced with forecasts.')
