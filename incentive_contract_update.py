@@ -21,7 +21,7 @@ def load():
     response = client().table(TABLE).select("*").order("sort_order").execute()
     return pd.DataFrame(response.data or [])
 
-def render():
+def render_contract_update():
     st.title("Incentive & Contract Update")
     st.caption("Editable contract and incentive tracker · changes persist in Supabase after Save.")
     try:
@@ -92,3 +92,12 @@ def render():
             st.rerun()
         except Exception as exc:
             st.error(f"Save failed: {exc}")
+
+
+def render():
+    contract, profiling = st.tabs(["Contract Update", "Profiling Incentives"])
+    with contract:
+        render_contract_update()
+    with profiling:
+        from profiling_incentives import render as render_profiling
+        render_profiling()
