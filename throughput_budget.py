@@ -42,17 +42,17 @@ def render(sb):
     st.subheader('Data Table (With Legend Keys)')
     # Render as HTML so series swatches remain visible, matching Excel legend keys.
     import html
-    headers = ''.join(f'<th>{m}</th>' for m in MONTHS+['Total'])
+    headers = ''.join(f'<th style="text-align:center;padding:7px 10px">{m}</th>' for m in MONTHS+['Total'])
     rows = []
     for s in SERIES:
         key = f'<span style="display:inline-block;width:10px;height:10px;background:{COLORS[s]};margin-right:7px;border-radius:2px"></span>'
-        vals = ''.join(f'<td>{int(v):,}</td>' if pd.notna(v) else '<td>—</td>' for v in totals_df.loc[s])
-        rows.append(f'<tr><th style="text-align:left;white-space:nowrap">{key}{html.escape(s)}</th>{vals}</tr>')
+        vals = ''.join(f'<td style="text-align:center;padding:7px 10px">{int(v):,}</td>' if pd.notna(v) else '<td style="text-align:center;padding:7px 10px">—</td>' for v in totals_df.loc[s])
+        rows.append(f'<tr><th style="text-align:left;white-space:nowrap;padding:7px 10px">{key}{html.escape(s)}</th>{vals}</tr>')
     for label in changes.columns:
-        vals = ''.join(f'<td>{v:+.2f}%</td>' if pd.notna(v) else '<td>—</td>' for v in changes[label])
-        rows.append(f'<tr><th style="text-align:left;white-space:nowrap">{html.escape(label)}</th>{vals}</tr>')
+        vals = ''.join(f'<td style="text-align:center;padding:7px 10px">{v:+.2f}%</td>' if pd.notna(v) else '<td style="text-align:center;padding:7px 10px">—</td>' for v in changes[label])
+        rows.append(f'<tr><th style="text-align:left;white-space:nowrap;padding:7px 10px">{html.escape(label)}</th>{vals}</tr>')
     if has_saved_data:
-        st.markdown('<div style="overflow-x:auto"><table style="width:100%;font-size:12px"><thead><tr><th>Series</th>'+headers+'</tr></thead><tbody>'+''.join(rows)+'</tbody></table></div>',unsafe_allow_html=True)
+        st.markdown('<div style="overflow-x:auto"><table style="width:100%;font-size:12px"><thead><tr><th style="text-align:left;padding:7px 10px">Series</th>'+headers+'</tr></thead><tbody>'+''.join(rows)+'</tbody></table></div>',unsafe_allow_html=True)
     st.caption('Change (%) dihitung otomatis dari angka yang tersimpan.')
     with st.expander('✏️ Input / Edit Data',expanded=False):
         st.caption('Edit monthly TEUs and the supplied Total. Save to Supabase to share updates with your team.')
