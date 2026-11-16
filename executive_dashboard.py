@@ -273,21 +273,57 @@ def render(sb):
     else:
         st.info('Belum ada data Throughput vs Budget.')
 
-    section(f'Tanjung Priok Market Share · YTD {MONTHS[month-1]} {year}', 'Terminal throughput: JICT, TPK KOJA, MAL, TO3, NPCT1')
-    left,right=st.columns([1,1])
-    with left:
-        if tp_total:
-            st.metric('Total Tanjung Priok',fmt(tp_total,' TEU'))
-            st.metric('JICT',fmt(jict,' TEU'))
-            st.metric('JICT Share',fmt(ms,'%',2))
-            st.dataframe(current_term.rename(columns={'terminal':'Terminal','value':'YTD TEU'}),hide_index=True,use_container_width=True)
-        else: st.info('Belum ada data market share untuk periode ini.')
-    with right:
-        if tp_total:
-            pie=alt.Chart(current_term).mark_arc(innerRadius=55).encode(
-                theta=alt.Theta('value:Q'),color=alt.Color('terminal:N',title='Terminal',sort=TERMINALS),
-                tooltip=['terminal:N',alt.Tooltip('value:Q',format=',.0f')]).properties(height=280)
-            st.altair_chart(pie,use_container_width=True)
+    section(f'Tanjung Priok Market Share · YTD {MONTHS[month-1]} {year}',
+            'Terminal throughput: JICT, TPK KOJA, MAL, TO3, NPCT1')
+    if tp_total:
+        # A single aligned KPI row prevents the tall stack of st.metric widgets
+        # from leaving a large empty region beside the market-share donut.
+        share_cards = [
+            ('Total Tanjung Priok', fmt(tp_total), 'TEU', f'Combined terminal throughput · YTD {MONTHS[month-1]}', '▦', '#2563eb'),
+            ('JICT Throughput', fmt(jict), 'TEU', f'JICT volume · YTD {MONTHS[month-1]}', '▥', '#0d9488'),
+            ('JICT Market Share', fmt(ms, digits=2), '%', 'Share of Tanjung Priok throughput', '◉', '#7c3aed'),
+        ]
+        st.markdown("""<style>
+        .jict-share-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:10px 0 18px}
+        .jict-share-card{position:relative;overflow:hidden;min-width:0;border:1px solid rgba(128,145,166,.25);
+          border-radius:16px;background:var(--secondary-background-color,#f8fafc);
+          padding:17px 19px;min-height:128px;box-shadow:0 3px 12px rgba(15,23,42,.04)}
+        .jict-share-card:before{content:'';position:absolute;inset:0 auto 0 0;width:4px;background:var(--share-accent)}
+        .jict-share-label{font-size:.83rem;font-weight:650;opacity:.8}
+        .jict-share-value{font-size:clamp(1.4rem,2.3vw,2rem);font-weight:780;letter-spacing:-.035em;
+          line-height:1.25;margin:12px 0 6px;overflow-wrap:anywhere}
+        .jict-share-unit{font-size:.77rem;font-weight:600;opacity:.65;letter-spacing:0}
+        .jict-share-note{font-size:.75rem;opacity:.7;line-height:1.4}
+        @media(max-width:800px){.jict-share-grid{grid-template-columns:1fr}}
+        </style>""", unsafe_allow_html=True)
+        cards_html = []
+        for label, value, unit, note, icon, accent in share_cards:
+            cards_html.append(
+                f'<div class="jict-share-card" style="--share-accent:{accent}">'
+                f'<div class="jict-share-label">{escape(label)} <span style="float:right">{icon}</span></div>'
+                f'<div class="jict-share-value">{escape(value)} <span class="jict-share-unit">{escape(unit)}</span></div>'
+                f'<div class="jict-share-note">{escape(note)}</div></div>'
+            )
+        st.markdown('<div class="jict-share-grid">'+''.join(cards_html)+'</div>', unsafe_allow_html=True)
+
+        left, right = st.columns([1.05, 1], gap='medium', vertical_alignment='top')
+        with left:
+            st.markdown('**Terminal Breakdown · YTD TEU**')
+            breakdown = current_term.rename(columns={'terminal':'Terminal','value':'YTD TEU'}).copy()
+            breakdown['Share (%)'] = breakdown['YTD TEU'] / tp_total * 100
+            breakdown['YTD TEU'] = breakdown['YTD TEU'].map(lambda v: f'{v:,.0f}')
+            breakdown['Share (%)'] = breakdown['Share (%)'].map(lambda v: f'{v:.2f}%')
+            st.dataframe(breakdown, hide_index=True, use_container_width=True, height=260)
+        with right:
+            st.markdown('**Market Share Distribution**')
+            pie = alt.Chart(current_term).mark_arc(innerRadius=75, outerRadius=116).encode(
+                theta=alt.Theta('value:Q'),
+                color=alt.Color('terminal:N', title='Terminal', sort=TERMINALS),
+                tooltip=[alt.Tooltip('terminal:N', title='Terminal'), alt.Tooltip('value:Q', title='YTD TEU', format=',.0f')]
+            ).properties(height=260)
+            st.altair_chart(pie, use_container_width=True)
+    else:
+        st.info('Belum ada data market share untuk periode ini.')
 
     section(f'Market Share Tanjung Priok · {year-1} vs {year}', 'Perbandingan YTD dengan cutoff bulan yang sama')
     share_parts=[]
