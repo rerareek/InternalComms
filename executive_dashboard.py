@@ -61,6 +61,7 @@ def chart(data, x='Month', y='TEUs', color='Series', kind='line', height=290, or
 
 
 def section(title, description=None):
+    st.markdown("<div class='jict-section-divider' aria-hidden='true'></div>", unsafe_allow_html=True)
     st.subheader(title)
     if description:
         st.caption(description)
@@ -109,6 +110,14 @@ def growth_display(value):
 
 
 def render(sb):
+    st.markdown('''<style>
+    .jict-section-divider{height:1px;background:linear-gradient(90deg,transparent 0%,rgba(100,116,139,.38) 12%,rgba(100,116,139,.38) 88%,transparent 100%);margin:38px 0 27px}
+    .jict-comparison-heading{font-size:.9rem;font-weight:700;margin:4px 0 0}
+    .jict-comparison-caption{font-size:.78rem;opacity:.7;margin-bottom:9px}
+    .jict-share-delta{border:1px solid rgba(100,116,139,.25);border-radius:13px;padding:12px 15px;margin:8px 0 16px;background:var(--secondary-background-color,#f8fafc)}
+    .jict-share-delta-label{font-size:.78rem;opacity:.75}
+    .jict-share-delta-value{font-size:1.45rem;font-weight:750;margin:3px 0}
+    </style>''',unsafe_allow_html=True)
     st.header('Executive Dashboard')
     st.caption('JICT · Marketing & Seaside Intelligence | Live data from existing Supabase menus')
     a,b,c = st.columns([1,1,2])
@@ -325,23 +334,64 @@ def render(sb):
     else:
         st.info('Belum ada data market share untuk periode ini.')
 
-    section(f'Market Share Tanjung Priok · {year-1} vs {year}', 'Perbandingan YTD dengan cutoff bulan yang sama')
-    share_parts=[]
-    for yr,frame in [(year-1,prev_term),(year,current_term)]:
-        if not frame.empty and frame['value'].sum()>0:
-            temp=frame.copy(); temp['Year']=str(yr);temp['Share (%)']=temp['value']/temp['value'].sum()*100
+    section(f'Market Share Tanjung Priok · {year-1} vs {year}',
+            f'Year-over-year terminal composition · January–{MONTHS[month-1]} for both years')
+    share_parts = []
+    for yr, frame in [(year-1, prev_term), (year, current_term)]:
+        if not frame.empty and frame['value'].sum() > 0:
+            temp = frame.copy()
+            temp['Year'] = str(yr)
+            temp['Share (%)'] = temp['value'] / temp['value'].sum() * 100
             share_parts.append(temp)
     if share_parts:
-        combined=pd.concat(share_parts,ignore_index=True)
-        cols=st.columns(2)
-        for col,yr in zip(cols,[year-1,year]):
-            d=combined[combined['Year'].eq(str(yr))]
+        combined = pd.concat(share_parts, ignore_index=True)
+        # Consistent colors across both donuts make changes easier to compare.
+        terminal_colors = alt.Scale(domain=TERMINALS,
+                                    range=['#1677b8','#f59e0b','#10b981','#8b5cf6','#ef6c63'])
+        left, right = st.columns(2, gap='large')
+        for col, yr in zip([left, right], [year-1, year]):
+            d = combined[combined['Year'].eq(str(yr))].copy()
             with col:
-                st.markdown(f'**{yr} YTD**')
-                if d.empty: st.info('Belum ada data.')
-                else:
-                    st.altair_chart(alt.Chart(d).mark_arc(innerRadius=45).encode(theta='value:Q',color='terminal:N',tooltip=['terminal:N',alt.Tooltip('Share (%):Q',format='.2f')]).properties(height=235),use_container_width=True)
-    else: st.info('Belum ada data market share 2025/2026.')
+                st.markdown(f'<div class="jict-comparison-heading">{yr} · YTD {MONTHS[month-1]}</div>', unsafe_allow_html=True)
+                if d.empty:
+                    st.info('Belum ada data untuk tahun ini.')
+                    continue
+                total = float(d['value'].sum())
+                jict_share = float(d.loc[d['terminal'].eq('JICT'), 'Share (%)'].sum())
+                st.markdown(f'<div class="jict-comparison-caption">Total terminal throughput: <b>{total:,.0f} TEU</b></div>',unsafe_allow_html=True)
+                arc = alt.Chart(d).mark_arc(innerRadius=83, outerRadius=124, padAngle=0.018, cornerRadius=4).encode(
+                    theta=alt.Theta('value:Q', stack=True),
+                    color=alt.Color('terminal:N', scale=terminal_colors, sort=TERMINALS,
+                                    legend=alt.Legend(title=None, orient='bottom', columns=3)),
+                    tooltip=[alt.Tooltip('terminal:N',title='Terminal'),
+                             alt.Tooltip('value:Q',title='YTD TEU',format=',.0f'),
+                             alt.Tooltip('Share (%):Q',title='Share',format='.2f')]
+                )
+                center = alt.Chart(pd.DataFrame({'label':[f'{jict_share:.2f}%'], 'subtitle':['JICT SHARE']})).mark_text(
+                    fontSize=23,fontWeight='bold',dy=-7,color='#1677b8').encode(text='label:N')
+                subtitle = alt.Chart(pd.DataFrame({'label':['JICT SHARE']})).mark_text(
+                    fontSize=10,dy=18,color='#64748b').encode(text='label:N')
+                st.altair_chart((arc + center + subtitle).properties(height=300),use_container_width=True)
+        # Comparison table highlights movement in percentage points, not volume growth.
+        pivot = combined.pivot_table(index='terminal', columns='Year', values='Share (%)', aggfunc='sum')
+        prev_col, now_col = str(year-1), str(year)
+        if prev_col in pivot.columns and now_col in pivot.columns:
+            pivot = pivot.reindex(TERMINALS).dropna(how='all').fillna(0)
+            pivot['Change (pp)'] = pivot[now_col] - pivot[prev_col]
+            jict_delta = float(pivot.loc['JICT','Change (pp)']) if 'JICT' in pivot.index else None
+            if jict_delta is not None:
+                sign = '+' if jict_delta > 0 else ''
+                direction = '▲' if jict_delta > 0 else ('▼' if jict_delta < 0 else '●')
+                color = '#15956c' if jict_delta > 0 else ('#db5b53' if jict_delta < 0 else '#64748b')
+                st.markdown(f'<div class="jict-share-delta"><div class="jict-share-delta-label">JICT market share movement · {year-1} → {year}</div><div class="jict-share-delta-value" style="color:{color}">{direction} {sign}{jict_delta:.2f} pp</div><div class="jict-share-delta-label">Percentage-point change at the same YTD cutoff</div></div>',unsafe_allow_html=True)
+            st.markdown('**Market share by terminal · Year-over-year**')
+            compare = pivot.reset_index().rename(columns={'terminal':'Terminal',prev_col:f'{year-1} Share (%)',now_col:f'{year} Share (%)'})
+            st.dataframe(compare.style.format({f'{year-1} Share (%)':'{:.2f}%',f'{year} Share (%)':'{:.2f}%','Change (pp)':'{:+.2f} pp'}),
+                         hide_index=True,use_container_width=True)
+        else:
+            st.caption('Perbandingan perubahan market share tersedia setelah kedua tahun memiliki data.')
+    else:
+        st.info('Belum ada data market share untuk perbandingan tahun.')
 
     section(f'Shipping Line Share · YTD {MONTHS[month-1]} {year}', 'Pangsa shipping line berdasarkan Full + Empty; OTHERS tetap masuk total')
     if not ytd.empty and all(c in ytd for c in ['shipping_line','full_2026','empty_2026']):
