@@ -210,15 +210,68 @@ def render(sb):
     if year != 2026:
         st.info('Annual Forecast 2026 / Budget 2026 / Actual 2025 cards and YTD shipping-line year columns are designed for 2026. Select 2026 for the intended comparison.')
 
-    section('JICT Throughput Summary','Monthly actual 2025, budget 2026, forecast 2026 · TEUs · Throughput vs Budget menu')
+    section('JICT Throughput Summary', 'Monthly volume comparison · TEU · Live from Throughput vs Budget')
     if not budget.empty:
-        d=budget[budget['month'].between(1,12)&budget['series'].isin(SERIES)].copy()
-        d['Month']=d['month'].astype(int).map(dict(enumerate(MONTHS,1)))
-        d=d.rename(columns={'series':'Series','value':'TEUs'}).dropna(subset=['TEUs'])
+        d = budget[budget['month'].between(1, 12) & budget['series'].isin(SERIES)].copy()
+        d['Month'] = d['month'].astype(int).map(dict(enumerate(MONTHS, 1)))
+        d = d.rename(columns={'series': 'Series', 'value': 'TEUs'}).dropna(subset=['TEUs'])
         if not d.empty:
-            st.altair_chart(chart(d,order=MONTHS),use_container_width=True)
-        else: st.info('Belum ada data throughput bulanan.')
-    else: st.info('Belum ada data Throughput vs Budget.')
+            palette = alt.Scale(domain=SERIES, range=['#ef4444', '#16a34a', '#7e22ce'])
+            bars = (alt.Chart(d).mark_bar().encode(
+                x=alt.X('Month:N', sort=MONTHS, title=None, axis=alt.Axis(labelAngle=0)),
+                xOffset=alt.XOffset('Series:N', sort=SERIES),
+                y=alt.Y('TEUs:Q', title='Throughput (TEU)', axis=alt.Axis(format=',.0f')),
+                color=alt.Color('Series:N', scale=palette, sort=SERIES, title=None),
+                tooltip=[alt.Tooltip('Month:N'), alt.Tooltip('Series:N'), alt.Tooltip('TEUs:Q', format=',.2f')]
+            ).properties(height=350))
+            st.altair_chart(bars, use_container_width=True)
+
+            monthly = d.pivot_table(index='Month', columns='Series', values='TEUs', aggfunc='sum').reindex(MONTHS)
+            for series_name in SERIES:
+                if series_name not in monthly.columns:
+                    monthly[series_name] = float('nan')
+            monthly = monthly[SERIES]
+            def growth_series(numerator, denominator):
+                return ((numerator / denominator) - 1) * 100.0
+            table = monthly.copy()
+            table['Change (%) 2026 vs 2025'] = growth_series(table['2026 (Forecast)'], table['2025 (Actual)'].replace(0, float('nan')))
+            table['Change (%) 2026 vs Budget'] = growth_series(table['2026 (Forecast)'], table['Budget 2026'].replace(0, float('nan')))
+            totals = monthly.sum(min_count=1)
+            # Use annual official KPI figures for the total column when available.
+            annuals = {'2025 (Actual)': actual25, 'Budget 2026': annual_budget26, '2026 (Forecast)': forecast}
+            for label, official_value in annuals.items():
+                if official_value is not None:
+                    totals[label] = official_value
+            total_row = totals.to_dict()
+            total_row['Change (%) 2026 vs 2025'] = pct(totals['2026 (Forecast)'], totals['2025 (Actual)'])
+            total_row['Change (%) 2026 vs Budget'] = pct(totals['2026 (Forecast)'], totals['Budget 2026'])
+            table.loc['Total'] = total_row
+            display = table.T
+            display.index.name = 'Metric'
+            display = display.reset_index()
+            display = display.rename(columns={'2025 (Actual)': '2025 (Actual)', '2026 (Forecast)': '2026 (Forecast)'})
+            formatted = display.copy()
+            for month_label in MONTHS + ['Total']:
+                formatted[month_label] = [
+                    (f'{v:+.2f}%' if pd.notna(v) else '—') if str(metric).startswith('Change (%)')
+                    else (f'{v:,.2f}'.rstrip('0').rstrip('.') if pd.notna(v) else '—')
+                    for metric, v in zip(display['Metric'], display[month_label])
+                ]
+            st.caption('Monthly throughput and YoY / budget changes · Total growth is calculated from annual totals, not monthly percentage averages.')
+            st.dataframe(formatted, hide_index=True, use_container_width=True)
+            with st.expander('Percentage change by month', expanded=False):
+                change_long = table.loc[MONTHS, ['Change (%) 2026 vs 2025', 'Change (%) 2026 vs Budget']].reset_index().rename(columns={'Month': 'Month'})
+                change_long = change_long.rename(columns={'index': 'Month'}).melt(id_vars='Month', var_name='Comparison', value_name='Change (%)').dropna()
+                pct_chart = alt.Chart(change_long).mark_line(point=True, strokeWidth=2.5).encode(
+                    x=alt.X('Month:N', sort=MONTHS, title=None),
+                    y=alt.Y('Change (%):Q', title='Change (%)', axis=alt.Axis(format='+,.1f')),
+                    color='Comparison:N', tooltip=['Month:N', 'Comparison:N', alt.Tooltip('Change (%):Q', format='+,.2f')]
+                ).properties(height=200)
+                st.altair_chart(pct_chart, use_container_width=True)
+        else:
+            st.info('Belum ada data throughput bulanan.')
+    else:
+        st.info('Belum ada data Throughput vs Budget.')
 
     section(f'Tanjung Priok Market Share · YTD {MONTHS[month-1]} {year}', 'Terminal throughput: JICT, TPK KOJA, MAL, TO3, NPCT1')
     left,right=st.columns([1,1])
