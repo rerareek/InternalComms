@@ -321,7 +321,20 @@ def render(sb):
                     for metric, v in zip(display['Metric'], display[month_label])
                 ]
             st.caption('Monthly throughput and YoY / budget changes · Total growth is calculated from annual totals, not monthly percentage averages.')
-            centered_dataframe(formatted, hide_index=True, use_container_width=True)
+            # Highlight forecast-only months after the selected YTD reporting cutoff.
+            # Style the display table only: source values and calculations stay unchanged.
+            future_months = MONTHS[month:]
+            if future_months:
+                def highlight_future_columns(col):
+                    return [
+                        'background-color: #fff2bf; color: #594400' if col.name in future_months else ''
+                        for _ in col
+                    ]
+                formatted_view = formatted.style.apply(highlight_future_columns, axis=0)
+                st.caption('🟨 Pale yellow columns = forecast months after the selected YTD cutoff.')
+            else:
+                formatted_view = formatted
+            centered_dataframe(formatted_view, hide_index=True, use_container_width=True)
             with st.expander('Percentage change by month', expanded=False):
                 change_long = table.loc[MONTHS, ['Change (%) 2026 vs 2025', 'Change (%) 2026 vs Budget']].reset_index().rename(columns={'Month': 'Month'})
                 change_long = change_long.rename(columns={'index': 'Month'}).melt(id_vars='Month', var_name='Comparison', value_name='Change (%)').dropna()
@@ -452,7 +465,7 @@ def render(sb):
                     'Change (pp)': 0.0,
                 })
                 st.markdown("**Terminal share · detailed figures**")
-                st.dataframe(
+                centered_dataframe(
                     pd.DataFrame(compact_rows),
                     hide_index=True,
                     use_container_width=True,
