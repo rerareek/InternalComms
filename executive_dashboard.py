@@ -452,7 +452,7 @@ def render(sb):
                     'Change (pp)': 0.0,
                 })
                 st.markdown("**Terminal share · detailed figures**")
-                centered_dataframe(
+                st.dataframe(
                     pd.DataFrame(compact_rows),
                     hide_index=True,
                     use_container_width=True,
