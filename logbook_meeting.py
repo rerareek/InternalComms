@@ -287,78 +287,42 @@ MENU_YTD_SHIPPING = "📦 YTD Throughput by Shipping Lines"
 MENU_OPERATIONAL = "📊 Operational Performance"
 MENU_CONTRACT = "📄 Profilling Incentives & Contract Update"
 MENU_SHIPPING_MAINTENANCE = "🚢 Shipping Data Maintenence"
-# Sidebar navigation: compact square cards with visible icon + label.
-# Keep st.radio for native Streamlit state, keyboard access and page routing.
+# Standard vertical Streamlit sidebar navigation, with a solid navy background.
+# Preserve native st.radio routing and the existing menu order.
 st.markdown("""<style>
-section[data-testid="stSidebar"] {background:linear-gradient(165deg,#101d32 0%,#182d46 65%,#183d49 100%);}
-section[data-testid="stSidebar"] * {color:#e9f1fa;}
+section[data-testid="stSidebar"] {background-color:#202A44 !important;}
+section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p,
+section[data-testid="stSidebar"] label,
+section[data-testid="stSidebar"] span {color:#F3F6FC;}
 section[data-testid="stSidebar"] div[role="radiogroup"] {
-  display:grid !important;
-  grid-template-columns:repeat(2,minmax(0,1fr));
-  gap:10px !important;
-  align-items:stretch;
+  display:flex !important;
+  flex-direction:column !important;
+  gap:3px !important;
 }
 section[data-testid="stSidebar"] div[role="radiogroup"] > label {
-  position:relative;
-  display:flex !important;
-  align-items:center;
-  justify-content:center;
-  text-align:center;
   width:100%;
-  min-width:0;
-  min-height:116px;
-  aspect-ratio:1 / 1;
-  margin:0 !important;
-  padding:12px 8px !important;
-  border:1px solid rgba(255,255,255,.13);
-  border-radius:14px;
-  background:rgba(255,255,255,.055);
-  cursor:pointer;
-  transition:background .18s ease,border-color .18s ease,transform .18s ease,box-shadow .18s ease;
+  min-height:0;
+  aspect-ratio:auto;
+  padding:9px 10px;
+  margin:0;
+  border:0;
+  border-radius:7px;
+  background:transparent;
+  text-align:left;
+  justify-content:flex-start;
+  transition:background-color .15s ease;
 }
 section[data-testid="stSidebar"] div[role="radiogroup"] > label:hover {
-  background:rgba(59,130,246,.22);
-  border-color:rgba(125,190,255,.75);
-  transform:translateY(-2px);
-  box-shadow:0 6px 16px rgba(0,0,0,.18);
+  background:rgba(255,255,255,.12);
 }
 section[data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) {
-  background:rgba(20,184,166,.22);
-  border-color:#2dd4bf;
-  box-shadow:inset 0 0 0 1px rgba(45,212,191,.35);
+  background:rgba(255,255,255,.18);
 }
-section[data-testid="stSidebar"] div[role="radiogroup"] > label:focus-within {
-  outline:2px solid #93c5fd;
-  outline-offset:2px;
-}
-section[data-testid="stSidebar"] div[role="radiogroup"] > label > div:first-child {
-  position:absolute !important;
-  width:1px !important;
-  height:1px !important;
-  overflow:hidden !important;
-  clip-path:inset(50%);
-}
-section[data-testid="stSidebar"] div[role="radiogroup"] > label [data-testid="stMarkdownContainer"] p {
-  margin:0;
-  font-size:12px;
-  font-weight:600;
-  line-height:1.45;
-  overflow-wrap:anywhere;
-  white-space:normal;
-}
-section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {line-height:1.45;}
 </style>""", unsafe_allow_html=True)
 with st.sidebar:
-    st.markdown("""<div style="padding:18px 4px 8px">
-      <div style="font-size:11px;letter-spacing:2px;color:#5eead4;font-weight:700">INTERNAL WORKSPACE</div>
-      <div style="font-size:25px;font-weight:800;color:white;margin-top:6px">◈ CRM UPDATE</div>
-      <div style="font-size:12px;color:#a9bdd3;margin-top:4px">Marketing · Seaside Operations</div>
-    </div>""", unsafe_allow_html=True)
+    st.markdown('<div style="font-size:24px;font-weight:800;color:#FFFFFF;padding:12px 4px 8px">CRM UPDATE</div>', unsafe_allow_html=True)
     st.divider()
-    st.caption("WORKSPACE MENU")
     menu = st.radio("Navigation", [MENU_EXECUTIVE, MENU_LOG, MENU_TP, MENU_BUDGET, MENU_SERVICE, MENU_SHIPPING_COMPARE, MENU_YTD_SHIPPING, MENU_OPERATIONAL, MENU_CONTRACT, MENU_SHIPPING_MAINTENANCE, MENU_COMPANY, MENU_WINDOW], label_visibility="collapsed")
-    st.divider()
-    st.markdown('<div style="font-size:11px;color:#a9bdd3;padding:8px 4px">INTERNALCOMMS  ·  Dashboard</div>',unsafe_allow_html=True)
 
 # ===== Page: Log Book Meeting =====
 if menu == MENU_EXECUTIVE:
