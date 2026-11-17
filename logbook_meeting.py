@@ -305,25 +305,36 @@ _SIDEBAR_ITEMS = [
     (MENU_WINDOW, "window_tanjung_priok"),
 ]
 
+# Sidebar groups are presentation-only; routing and existing image assets are unchanged.
+_SIDEBAR_GROUPS = [
+    ("OVERVIEW", _SIDEBAR_ITEMS[:2]),
+    ("ANALYTICS & REPORTING", _SIDEBAR_ITEMS[2:8]),
+    ("MANAGEMENT & REFERENCE", _SIDEBAR_ITEMS[8:]),
+]
+
 st.markdown("""<style>
 section[data-testid="stSidebar"] {background-color:#202A44 !important;}
-section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {color:#F3F6FC;}
+section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {color:#E5EBF5;}
 section[data-testid="stSidebar"] [data-testid="stButton"] button {
-    width:100%; min-height:38px; padding:7px 9px;
-    justify-content:flex-start; text-align:left; border-radius:7px;
+    width:100%; min-height:39px; padding:8px 10px;
+    justify-content:flex-start; text-align:left; border-radius:9px;
     color:#F3F6FC !important; border:0 !important;
-    background:transparent; transition:background-color .15s ease;
+    background:transparent; transition:background-color .16s ease, transform .16s ease;
     white-space:normal;
 }
 section[data-testid="stSidebar"] [data-testid="stButton"] button:hover {
-    background:rgba(255,255,255,.12) !important;
+    background:#344866 !important; transform:translateX(2px);
 }
 section[data-testid="stSidebar"] [data-testid="stButton"] button[kind="primary"] {
-    background:rgba(255,255,255,.20) !important;
+    background:#344866 !important;
+    box-shadow:inset -3px 0 #6CD5E6;
     font-weight:700;
 }
 section[data-testid="stSidebar"] [data-testid="stButton"] button p {
     color:#F3F6FC !important; font-size:13px;
+}
+section[data-testid="stSidebar"] [data-testid="stImage"] img {
+    object-fit:contain;
 }
 </style>""", unsafe_allow_html=True)
 
@@ -331,22 +342,34 @@ if st.session_state.get("internalcomms_active_menu") not in [name for name, _ in
     st.session_state["internalcomms_active_menu"] = MENU_EXECUTIVE
 
 with st.sidebar:
-    st.markdown('<div style="font-size:24px;font-weight:800;color:#FFFFFF;padding:12px 4px 8px">CRM UPDATE</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div style="padding:12px 4px 2px;line-height:1.25">'
+        '<div style="font-size:23px;font-weight:800;letter-spacing:.3px;color:#FFFFFF">CRM UPDATE</div>'
+        '<div style="font-size:12px;color:#AAB9D2;margin-top:5px">JICT · Marketing Intelligence</div>'
+        '</div>', unsafe_allow_html=True
+    )
     st.divider()
-    for _label, _icon_file in _SIDEBAR_ITEMS:
-        _icon_col, _nav_col = st.columns([1, 6], gap="small", vertical_alignment="center")
-        with _icon_col:
-            _icon_path = Path(__file__).resolve().parent / "assets" / "sidebar_icons" / f"{_icon_file}.jpg"
-            if _icon_path.is_file():
-                st.image(str(_icon_path), use_container_width=True)
-        with _nav_col:
-            if st.button(
-                _label, key=f"sidebar_nav_{_icon_file}",
-                type="primary" if st.session_state["internalcomms_active_menu"] == _label else "secondary",
-                use_container_width=True,
-            ):
-                st.session_state["internalcomms_active_menu"] = _label
-                st.rerun()
+    for _group_name, _group_items in _SIDEBAR_GROUPS:
+        st.markdown(
+            f'<div style="color:#93A7C5;font-size:10px;font-weight:750;'
+            f'letter-spacing:1.15px;padding:15px 4px 6px">{_group_name}</div>',
+            unsafe_allow_html=True
+        )
+        for _label, _icon_file in _group_items:
+            _icon_col, _nav_col = st.columns([1, 6], gap="small", vertical_alignment="center")
+            with _icon_col:
+                _icon_path = Path(__file__).resolve().parent / "assets" / "sidebar_icons" / f"{_icon_file}.jpg"
+                if _icon_path.is_file():
+                    st.image(str(_icon_path), use_container_width=True)
+            with _nav_col:
+                if st.button(
+                    _label, key=f"sidebar_nav_{_icon_file}",
+                    type="primary" if st.session_state["internalcomms_active_menu"] == _label else "secondary",
+                    use_container_width=True,
+                ):
+                    st.session_state["internalcomms_active_menu"] = _label
+                    st.rerun()
+
 menu = st.session_state["internalcomms_active_menu"]
 
 # ===== Page: Log Book Meeting =====
