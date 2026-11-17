@@ -437,34 +437,32 @@ def render(sb):
                     share_new = float(pivot.loc[terminal, now_col]) if terminal in pivot.index else 0.0
                     compact_rows.append({
                         'Terminal': terminal,
-                        f'{year-1} TEU': vol_old,
-                        f'{year-1} Share': share_old,
-                        f'{year} TEU': vol_new,
-                        f'{year} Share': share_new,
+                        f'{year-1} (TEU)': vol_old,
+                        f'{year-1} Share (%)': share_old,
+                        f'{year} (TEU)': vol_new,
+                        f'{year} Share (%)': share_new,
                         'Change (pp)': share_new - share_old,
                     })
                 compact_rows.append({
                     'Terminal': 'TOTAL',
-                    f'{year-1} TEU': float(combined.loc[combined['Year'].eq(prev_col), 'value'].sum()),
-                    f'{year-1} Share': 100.0,
-                    f'{year} TEU': float(combined.loc[combined['Year'].eq(now_col), 'value'].sum()),
-                    f'{year} Share': 100.0,
+                    f'{year-1} (TEU)': float(combined.loc[combined['Year'].eq(prev_col), 'value'].sum()),
+                    f'{year-1} Share (%)': 100.0,
+                    f'{year} (TEU)': float(combined.loc[combined['Year'].eq(now_col), 'value'].sum()),
+                    f'{year} Share (%)': 100.0,
                     'Change (pp)': 0.0,
                 })
                 st.markdown("**Terminal share · detailed figures**")
+                terminal_table = pd.DataFrame(compact_rows)
+                terminal_format = {
+                    f'{year-1} (TEU)': '{:,.0f}',
+                    f'{year-1} Share (%)': '{:.2f}%',
+                    f'{year} (TEU)': '{:,.0f}',
+                    f'{year} Share (%)': '{:.2f}%',
+                    'Change (pp)': '{:+.2f}',
+                }
                 centered_dataframe(
-                    pd.DataFrame(compact_rows),
-                    hide_index=True,
-                    use_container_width=True,
-                    height=284,
-                    column_config={
-                        'Terminal': st.column_config.TextColumn('Terminal', width='small'),
-                        f'{year-1} TEU': st.column_config.NumberColumn(f'{year-1} TEU', format='%,.0f'),
-                        f'{year-1} Share': st.column_config.NumberColumn(f'{year-1} %', format='%.2f%%'),
-                        f'{year} TEU': st.column_config.NumberColumn(f'{year} TEU', format='%,.0f'),
-                        f'{year} Share': st.column_config.NumberColumn(f'{year} %', format='%.2f%%'),
-                        'Change (pp)': st.column_config.NumberColumn('Δ pp', format='%+.2f'),
-                    },
+                    terminal_table.style.format(terminal_format),
+                    hide_index=True, use_container_width=True, height=284,
                 )
         else:
             st.caption('Perbandingan perubahan market share tersedia setelah kedua tahun memiliki data.')
