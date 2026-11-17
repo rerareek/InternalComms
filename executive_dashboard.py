@@ -334,6 +334,23 @@ def render(sb):
                 st.caption('🟨 Pale yellow columns = forecast months after the selected YTD cutoff.')
             else:
                 formatted_view = formatted
+            # Bold the header row and highlight forecast-month headers too.
+            # Styling is presentation-only; underlying throughput figures are unchanged.
+            header_styles = [
+                {'selector': 'thead th', 'props': [('font-weight', '700 !important')]},
+            ]
+            for future_month in future_months:
+                col_index = formatted.columns.get_loc(future_month)
+                header_styles.append({
+                    'selector': f'thead th.col_heading.level0.col{col_index}',
+                    'props': [
+                        ('background-color', '#fff2bf !important'),
+                        ('color', '#594400 !important'),
+                        ('font-weight', '700 !important'),
+                    ],
+                })
+            formatted_view = formatted_view.style if not isinstance(formatted_view, pd.io.formats.style.Styler) else formatted_view
+            formatted_view = formatted_view.set_table_styles(header_styles, overwrite=False)
             centered_dataframe(formatted_view, hide_index=True, use_container_width=True)
             with st.expander('Percentage change by month', expanded=False):
                 change_long = table.loc[MONTHS, ['Change (%) 2026 vs 2025', 'Change (%) 2026 vs Budget']].reset_index().rename(columns={'Month': 'Month'})
