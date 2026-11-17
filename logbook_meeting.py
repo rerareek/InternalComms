@@ -289,81 +289,65 @@ MENU_YTD_SHIPPING = "YTD Throughput by Shipping Lines"
 MENU_OPERATIONAL = "Operational Performance"
 MENU_CONTRACT = "Profilling Incentives & Contract Update"
 MENU_SHIPPING_MAINTENANCE = "Shipping Data Maintenence"
-# Monochrome JPG menu icons; the native Streamlit radio retains routing and keyboard access.
-_SIDEBAR_ICON_FILES = [
-    "executive_dashboard", "log_book_meeting", "tanjung_priok_throughput",
-    "throughput_vs_budget", "throughput_per_service", "throughput_compare_shipping_line",
-    "ytd_throughput_shipping_lines", "operational_performance",
-    "profiling_incentives_contract", "shipping_data_maintenance",
-    "company_details", "window_tanjung_priok",
+# Native Streamlit image + button navigation. No CSS pseudo-elements or radio DOM assumptions.
+_SIDEBAR_ITEMS = [
+    (MENU_EXECUTIVE, "executive_dashboard"),
+    (MENU_LOG, "log_book_meeting"),
+    (MENU_TP, "tanjung_priok_throughput"),
+    (MENU_BUDGET, "throughput_vs_budget"),
+    (MENU_SERVICE, "throughput_per_service"),
+    (MENU_SHIPPING_COMPARE, "throughput_compare_shipping_line"),
+    (MENU_YTD_SHIPPING, "ytd_throughput_shipping_lines"),
+    (MENU_OPERATIONAL, "operational_performance"),
+    (MENU_CONTRACT, "profiling_incentives_contract"),
+    (MENU_SHIPPING_MAINTENANCE, "shipping_data_maintenance"),
+    (MENU_COMPANY, "company_details"),
+    (MENU_WINDOW, "window_tanjung_priok"),
 ]
-_icon_css = []
-for _idx, _filename in enumerate(_SIDEBAR_ICON_FILES, start=1):
-    _icon_path = Path(__file__).resolve().parent / "assets" / "sidebar_icons" / (_filename + ".jpg")
-    if _icon_path.is_file():
-        _encoded = base64.b64encode(_icon_path.read_bytes()).decode("ascii")
-        _icon_css.append(
-            f'section[data-testid="stSidebar"] div[role="radiogroup"] > label:nth-child({_idx})::before '
-            f'{{background-image:url("data:image/jpeg;base64,{_encoded}");}}'
-        )
-st.markdown("<style>" + "\n".join(_icon_css) + "</style>", unsafe_allow_html=True)
 
-# Standard vertical Streamlit sidebar navigation, with a solid navy background.
-# Preserve native st.radio routing and the existing menu order.
 st.markdown("""<style>
 section[data-testid="stSidebar"] {background-color:#202A44 !important;}
-section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p,
-section[data-testid="stSidebar"] label,
-section[data-testid="stSidebar"] span {color:#F3F6FC;}
-section[data-testid="stSidebar"] div[role="radiogroup"] {
-  display:flex !important;
-  flex-direction:column !important;
-  gap:3px !important;
+section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {color:#F3F6FC;}
+section[data-testid="stSidebar"] [data-testid="stButton"] button {
+    width:100%; min-height:38px; padding:7px 9px;
+    justify-content:flex-start; text-align:left; border-radius:7px;
+    color:#F3F6FC !important; border:0 !important;
+    background:transparent; transition:background-color .15s ease;
+    white-space:normal;
 }
-section[data-testid="stSidebar"] div[role="radiogroup"] > label {
-  width:100%;
-  min-height:0;
-  aspect-ratio:auto;
-  padding:9px 10px;
-  margin:0;
-  border:0;
-  border-radius:7px;
-  background:transparent;
-  text-align:left;
-  justify-content:flex-start;
-  transition:background-color .15s ease;
+section[data-testid="stSidebar"] [data-testid="stButton"] button:hover {
+    background:rgba(255,255,255,.12) !important;
 }
-section[data-testid="stSidebar"] div[role="radiogroup"] > label::before {
-  content:"";
-  display:inline-block;
-  flex:0 0 25px;
-  width:25px;
-  height:25px;
-  background-size:contain;
-  background-position:center;
-  background-repeat:no-repeat;
-  border-radius:3px;
-  margin-right:9px;
+section[data-testid="stSidebar"] [data-testid="stButton"] button[kind="primary"] {
+    background:rgba(255,255,255,.20) !important;
+    font-weight:700;
 }
-section[data-testid="stSidebar"] div[role="radiogroup"] > label [data-testid="stWidgetLabel"] {color:#F3F6FC;}
-section[data-testid="stSidebar"] div[role="radiogroup"] > label > div:first-child:has(input[type="radio"]) {
-  position:absolute !important;
-  opacity:0 !important;
-  width:1px !important;
-  height:1px !important;
-  overflow:hidden !important;
-}
-section[data-testid="stSidebar"] div[role="radiogroup"] > label:hover {
-  background:rgba(255,255,255,.12);
-}
-section[data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) {
-  background:rgba(255,255,255,.18);
+section[data-testid="stSidebar"] [data-testid="stButton"] button p {
+    color:#F3F6FC !important; font-size:13px;
 }
 </style>""", unsafe_allow_html=True)
+
+if st.session_state.get("internalcomms_active_menu") not in [name for name, _ in _SIDEBAR_ITEMS]:
+    st.session_state["internalcomms_active_menu"] = MENU_EXECUTIVE
+
 with st.sidebar:
     st.markdown('<div style="font-size:24px;font-weight:800;color:#FFFFFF;padding:12px 4px 8px">CRM UPDATE</div>', unsafe_allow_html=True)
     st.divider()
-    menu = st.radio("Navigation", [MENU_EXECUTIVE, MENU_LOG, MENU_TP, MENU_BUDGET, MENU_SERVICE, MENU_SHIPPING_COMPARE, MENU_YTD_SHIPPING, MENU_OPERATIONAL, MENU_CONTRACT, MENU_SHIPPING_MAINTENANCE, MENU_COMPANY, MENU_WINDOW], label_visibility="collapsed")
+    for _label, _icon_file in _SIDEBAR_ITEMS:
+        _icon_col, _nav_col = st.columns([1, 6], gap="small", vertical_alignment="center")
+        with _icon_col:
+            _icon_path = Path(__file__).resolve().parent / "assets" / "sidebar_icons" / f"{_icon_file}.jpg"
+            if _icon_path.is_file():
+                st.image(str(_icon_path), use_container_width=True)
+        with _nav_col:
+            if st.button(
+                _label, key=f"sidebar_nav_{_icon_file}",
+                type="primary" if st.session_state["internalcomms_active_menu"] == _label else "secondary",
+                use_container_width=True,
+            ):
+                st.session_state["internalcomms_active_menu"] = _label
+                st.rerun()
+menu = st.session_state["internalcomms_active_menu"]
 
 # ===== Page: Log Book Meeting =====
 if menu == MENU_EXECUTIVE:
