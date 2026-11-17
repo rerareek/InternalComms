@@ -1,0 +1,1 @@
+Section notes: collapsed below 7 Executive Dashboard sections. Run executive_section_notes.sql once in Supabase SQL Editor. Use a server-side service-role Supabase client kept in Streamlit secrets. If using anon key, add secure RLS policies for your authenticated users. Notes are separated by section, year, and YTD month. No existing data is modified.\n

@@ -15,6 +15,8 @@ from operational_metrics import render as render_operational_metrics
 from incentive_contract_update import render as render_incentive_contract_update
 from shipping_data_maintenance import render as render_shipping_data_maintenance
 import streamlit as st
+import base64
+from pathlib import Path
 from supabase import Client, create_client
 
 LOCATIONS = ["In JICT", "Out JICT"]
@@ -275,18 +277,37 @@ require_login()
 sb = get_client()
 st.title("CRM UPDATE")
 
-MENU_EXECUTIVE = "🏆 Executive Dashboard"
-MENU_LOG = "📒 Log Book Meeting"
-MENU_COMPANY = "🏢 Company Details"
-MENU_WINDOW = "🗓️ Window Tanjung Priok"
-MENU_TP = "🚢 Tanjung Priok Throughput"
-MENU_BUDGET = "📊 Throughput vs Budget 25/26"
-MENU_SERVICE = "🚢 Throughput Per Service"
-MENU_SHIPPING_COMPARE = "📈 Throughput & Compare Shipping Line"
-MENU_YTD_SHIPPING = "📦 YTD Throughput by Shipping Lines"
-MENU_OPERATIONAL = "📊 Operational Performance"
-MENU_CONTRACT = "📄 Profilling Incentives & Contract Update"
-MENU_SHIPPING_MAINTENANCE = "🚢 Shipping Data Maintenence"
+MENU_EXECUTIVE = "Executive Dashboard"
+MENU_LOG = "Log Book Meeting"
+MENU_COMPANY = "Company Details"
+MENU_WINDOW = "Window Tanjung Priok"
+MENU_TP = "Tanjung Priok Throughput"
+MENU_BUDGET = "Throughput vs Budget 25/26"
+MENU_SERVICE = "Throughput Per Service"
+MENU_SHIPPING_COMPARE = "Throughput & Compare Shipping Line"
+MENU_YTD_SHIPPING = "YTD Throughput by Shipping Lines"
+MENU_OPERATIONAL = "Operational Performance"
+MENU_CONTRACT = "Profilling Incentives & Contract Update"
+MENU_SHIPPING_MAINTENANCE = "Shipping Data Maintenence"
+# Monochrome JPG menu icons; the native Streamlit radio retains routing and keyboard access.
+_SIDEBAR_ICON_FILES = [
+    "executive_dashboard", "log_book_meeting", "tanjung_priok_throughput",
+    "throughput_vs_budget", "throughput_per_service", "throughput_compare_shipping_line",
+    "ytd_throughput_shipping_lines", "operational_performance",
+    "profiling_incentives_contract", "shipping_data_maintenance",
+    "company_details", "window_tanjung_priok",
+]
+_icon_css = []
+for _idx, _filename in enumerate(_SIDEBAR_ICON_FILES, start=1):
+    _icon_path = Path(__file__).resolve().parent / "assets" / "sidebar_icons" / (_filename + ".jpg")
+    if _icon_path.is_file():
+        _encoded = base64.b64encode(_icon_path.read_bytes()).decode("ascii")
+        _icon_css.append(
+            f'section[data-testid="stSidebar"] div[role="radiogroup"] > label:nth-child({_idx})::before '
+            f'{{background-image:url("data:image/jpeg;base64,{_encoded}");}}'
+        )
+st.markdown("<style>" + "\n".join(_icon_css) + "</style>", unsafe_allow_html=True)
+
 # Standard vertical Streamlit sidebar navigation, with a solid navy background.
 # Preserve native st.radio routing and the existing menu order.
 st.markdown("""<style>
@@ -311,6 +332,26 @@ section[data-testid="stSidebar"] div[role="radiogroup"] > label {
   text-align:left;
   justify-content:flex-start;
   transition:background-color .15s ease;
+}
+section[data-testid="stSidebar"] div[role="radiogroup"] > label::before {
+  content:"";
+  display:inline-block;
+  flex:0 0 25px;
+  width:25px;
+  height:25px;
+  background-size:contain;
+  background-position:center;
+  background-repeat:no-repeat;
+  border-radius:3px;
+  margin-right:9px;
+}
+section[data-testid="stSidebar"] div[role="radiogroup"] > label [data-testid="stWidgetLabel"] {color:#F3F6FC;}
+section[data-testid="stSidebar"] div[role="radiogroup"] > label > div:first-child:has(input[type="radio"]) {
+  position:absolute !important;
+  opacity:0 !important;
+  width:1px !important;
+  height:1px !important;
+  overflow:hidden !important;
 }
 section[data-testid="stSidebar"] div[role="radiogroup"] > label:hover {
   background:rgba(255,255,255,.12);
@@ -491,7 +532,7 @@ elif menu == MENU_COMPANY:
             for c in companies:
                 n = days_until(c["anniversary"]) if c.get("anniversary") else None
                 if n is not None and n <= 30:
-                    events.append((n, f"🏢 Anniversary {c['shipping_line']} ({fmt_dm(c['anniversary'])})"))
+                    events.append((n, f"Anniversary {c['shipping_line']} ({fmt_dm(c['anniversary'])})"))
             for p in contacts:
                 n = days_until(p["birth_date"]) if p.get("birth_date") else None
                 if n is not None and n <= 30:
