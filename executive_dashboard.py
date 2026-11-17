@@ -155,6 +155,58 @@ def _operational_ytd_table(data, cutoff, measure, series_order, key, mode="avera
     centered_dataframe(visible, hide_index=True, use_container_width=True, height=min(490, 95 + 37 * len(visible)))
 
 
+
+def section_notes(sb, section_key, section_title, year, month):
+    """Collapsed, period-specific notes saved in Supabase."""
+    with st.expander(f"📝 Notes & Comments · {section_title}", expanded=False):
+        st.caption(f"Notes for {MONTHS[month-1]} {year}. Notes from other reporting periods are kept separately.")
+        try:
+            result = (sb.table("executive_section_notes")
+                      .select("id,author,note,created_at")
+                      .eq("section_key", section_key)
+                      .eq("report_year", int(year))
+                      .eq("report_month", int(month))
+                      .order("created_at", desc=True)
+                      .limit(100).execute())
+            notes = result.data or []
+        except Exception:
+            st.info("Notes belum tersedia. Jalankan SQL executive_section_notes.sql di Supabase terlebih dahulu.")
+            return
+
+        if notes:
+            st.caption(f"{len(notes)} note(s) for this reporting period")
+            for item in notes:
+                author = str(item.get("author") or "Team")
+                timestamp = str(item.get("created_at") or "")[:16].replace("T", " ")
+                st.markdown(f"**{author}** · {timestamp}")
+                st.write(item.get("note") or "")
+                st.divider()
+        else:
+            st.caption("Belum ada notes untuk section dan periode ini.")
+
+        with st.form(f"exec_note_form_{section_key}_{year}_{month}", clear_on_submit=True):
+            author = st.text_input("Name / Team", max_chars=80,
+                                   key=f"exec_note_author_{section_key}_{year}_{month}")
+            note = st.text_area("Add a note", placeholder="Tulis insight, penjelasan perubahan, atau tindak lanjut...",
+                                max_chars=3000, height=100)
+            submitted = st.form_submit_button("Save Note", type="primary")
+            if submitted:
+                if not author.strip() or not note.strip():
+                    st.warning("Isi nama/team dan note terlebih dahulu.")
+                else:
+                    try:
+                        sb.table("executive_section_notes").insert({
+                            "section_key": section_key,
+                            "report_year": int(year),
+                            "report_month": int(month),
+                            "author": author.strip(),
+                            "note": note.strip(),
+                        }).execute()
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"Note gagal disimpan: {exc}")
+
+
 def render(sb):
     st.markdown('''<style>
     .jict-section-divider{height:1px;background:linear-gradient(90deg,transparent 0%,rgba(100,116,139,.38) 12%,rgba(100,116,139,.38) 88%,transparent 100%);margin:38px 0 27px}
@@ -366,6 +418,8 @@ def render(sb):
     else:
         st.info('Belum ada data Throughput vs Budget.')
 
+    section_notes(sb, 'throughput_summary', 'JICT Throughput Summary', year, month)
+
     # One consolidated market-share overview: current KPIs + YoY donuts + compact comparison.
     section(f'Tanjung Priok Market Share Overview · YTD {MONTHS[month-1]} {year}',
             f'Current market position and {year-1} vs {year} comparison · same YTD cutoff')
@@ -501,6 +555,8 @@ def render(sb):
     else:
         st.info('Belum ada data market share untuk perbandingan tahun.')
 
+    section_notes(sb, 'market_share', 'Tanjung Priok Market Share', year, month)
+
     section(f'Shipping Line Share · YTD {MONTHS[month-1]} {year}', 'Pangsa shipping line berdasarkan Full + Empty; OTHERS tetap masuk total')
     if not ytd.empty and all(c in ytd for c in ['shipping_line','full_2026','empty_2026']):
         lines=ytd.copy()
@@ -517,6 +573,8 @@ def render(sb):
                 st.warning(f'Reconciliation: total shipping-line detail {lines["TEUs"].sum():,.2f} vs {ytd_source} {ytd_volume:,.2f} TEU.')
         else: st.info('Volume shipping line belum diisi.')
     else: st.info('Belum ada data Shipping Line YTD untuk bulan ini.')
+
+    section_notes(sb, 'shipping_share', 'Shipping Line Share', year, month)
 
     section('Top 10 Shipping Lines and Volume', 'Ranking berdasarkan YTD 2026 Full + Empty · OTHERS tidak masuk ranking')
     if not ytd.empty and all(c in ytd for c in ['shipping_line','full_2026','empty_2026']):
@@ -552,6 +610,8 @@ def render(sb):
         else: st.info('Belum ada data ranking.')
     else: st.info('Belum ada data ranking Shipping Line.')
 
+    section_notes(sb, 'top10_shipping', 'Top 10 Shipping Lines', year, month)
+
     section('Gross Crane Rate & Vessel Operating Rate', f'Operational Performance · {year}')
     if not operational.empty:
         op=operational[operational['metric'].isin(['Gross QC Rate','Vess. Op. Rate']) & operational['month'].between(1,12)].dropna(subset=['value']).copy()
@@ -570,6 +630,8 @@ def render(sb):
                 col.metric(f'{name} · Average YTD',fmt(vals.mean(),digits=2) if not vals.empty else '—')
         else: st.info('Belum ada data GCR/VOR.')
     else: st.info('Belum ada data GCR/VOR.')
+
+    section_notes(sb, 'gcr_vor', 'GCR & VOR', year, month)
 
     section(f'Dwelling Time · {year}', 'Import Full, Export Full, Overall · days · Average YTD excludes missing months')
     if not operational.empty:
@@ -590,6 +652,8 @@ def render(sb):
         else: st.info('Belum ada data Dwelling.')
     else: st.info('Belum ada data Dwelling.')
 
+    section_notes(sb, 'dwelling', 'Dwelling Time', year, month)
+
     section('Divert · To Koja vs From Koja', f'Operational Performance · {year}')
     if not divert.empty and all(c in divert for c in ['month','to_koja','from_koja']):
         d=divert[divert['month'].between(1,12)].copy()
@@ -606,5 +670,7 @@ def render(sb):
                 st.markdown('**Monthly YTD · Divert (TEU)**')
                 _operational_ytd_table(d,month,'TEUs',['To Koja','From Koja'],'divert',mode='sum',unit='TEU')
     else: st.info('Belum ada data Divert.')
+
+    section_notes(sb, 'divert', 'Divert', year, month)
 
     st.caption('Data sources: throughput_budget_2526 · throughput · throughput_shipping_official_kpi · ytd_shipping_lines · ytd_shipping_official_totals · operational_monthly_metrics · operational_divert. All charts use calendar month order. Missing values are not silently replaced with forecasts.')
