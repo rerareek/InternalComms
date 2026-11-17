@@ -452,17 +452,19 @@ def render(sb):
                     'Change (pp)': 0.0,
                 })
                 st.markdown("**Terminal share · detailed figures**")
-                terminal_table = pd.DataFrame(compact_rows)
-                terminal_format = {
-                    f'{year-1} (TEU)': '{:,.0f}',
-                    f'{year-1} Share (%)': '{:.2f}%',
-                    f'{year} (TEU)': '{:,.0f}',
-                    f'{year} Share (%)': '{:.2f}%',
-                    'Change (pp)': '{:+.2f}',
-                }
                 centered_dataframe(
-                    terminal_table.style.format(terminal_format),
-                    hide_index=True, use_container_width=True, height=284,
+                    pd.DataFrame(compact_rows),
+                    hide_index=True,
+                    use_container_width=True,
+                    height=284,
+                    column_config={
+                        'Terminal': st.column_config.TextColumn('Terminal', width='small'),
+                        f'{year-1} (TEU)': st.column_config.NumberColumn(f'{year-1} (TEU)', format='%,.0f'),
+                        f'{year-1} Share (%)': st.column_config.NumberColumn(f'{year-1} Share (%)', format='%.2f%%'),
+                        f'{year} (TEU)': st.column_config.NumberColumn(f'{year} (TEU)', format='%,.0f'),
+                        f'{year} Share (%)': st.column_config.NumberColumn(f'{year} Share (%)', format='%.2f%%'),
+                        'Change (pp)': st.column_config.NumberColumn('Δ pp', format='%+.2f'),
+                    },
                 )
         else:
             st.caption('Perbandingan perubahan market share tersedia setelah kedua tahun memiliki data.')
