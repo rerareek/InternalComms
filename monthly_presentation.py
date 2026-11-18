@@ -11,7 +11,9 @@ from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN
 
-TEMPLATE = Path(__file__).parent / 'assets' / 'templates' / 'commercial_meeting_hpi.pptx'
+# Resolve relative to this module, independent of Streamlit's working directory.
+TEMPLATE = Path(__file__).resolve().parent / 'assets' / 'templates' / 'commercial_meeting_hpi.pptx'
+
 NAVY = RGBColor(27, 43, 76)
 
 
@@ -119,7 +121,13 @@ def _budget_data(sb, year):
 
 
 def generate(sb, year, month, meeting_date):
-    if not TEMPLATE.is_file():raise FileNotFoundError('Commercial Meeting master template missing.')
+    if not TEMPLATE.is_file():
+        raise FileNotFoundError(
+            f'Commercial Meeting master template missing at: {TEMPLATE}. '
+            'Upload assets/templates/commercial_meeting_hpi.pptx to the same GitHub '
+            'repository directory as monthly_presentation.py. Git LFS pointer files '
+            'are not supported as PowerPoint templates.'
+        )
     # Preflight: don't generate a falsely current deck when a key source is incomplete.
     terminals=_terminal_data(sb,year,month)
     budget=_budget_data(sb,year)
