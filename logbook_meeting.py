@@ -6,6 +6,7 @@ from datetime import date
 
 import altair as alt
 import pandas as pd
+from monthly_presentation import render as render_monthly_presentation
 from executive_dashboard import render as render_executive_dashboard
 from throughput_budget import render as render_budget
 from throughput_service import render as render_service
@@ -278,6 +279,7 @@ sb = get_client()
 st.title("CRM UPDATE")
 
 MENU_EXECUTIVE = "Executive Dashboard"
+MENU_PRESENTATION = "Monthly Presentation Generator"
 MENU_LOG = "Log Book Meeting"
 MENU_COMPANY = "Company Details"
 MENU_WINDOW = "Window Tanjung Priok"
@@ -292,6 +294,7 @@ MENU_SHIPPING_MAINTENANCE = "Shipping Data Maintenence"
 # Native Streamlit image + button navigation. No CSS pseudo-elements or radio DOM assumptions.
 _SIDEBAR_ITEMS = [
     (MENU_EXECUTIVE, "executive_dashboard"),
+    (MENU_PRESENTATION, "executive_dashboard"),
     (MENU_LOG, "log_book_meeting"),
     (MENU_TP, "tanjung_priok_throughput"),
     (MENU_BUDGET, "throughput_vs_budget"),
@@ -307,9 +310,9 @@ _SIDEBAR_ITEMS = [
 
 # Sidebar groups are presentation-only; routing and existing image assets are unchanged.
 _SIDEBAR_GROUPS = [
-    ("OVERVIEW", _SIDEBAR_ITEMS[:2]),
-    ("ANALYTICS & REPORTING", _SIDEBAR_ITEMS[2:8]),
-    ("MANAGEMENT & REFERENCE", _SIDEBAR_ITEMS[8:]),
+    ("OVERVIEW", _SIDEBAR_ITEMS[:3]),
+    ("ANALYTICS & REPORTING", _SIDEBAR_ITEMS[3:9]),
+    ("MANAGEMENT & REFERENCE", _SIDEBAR_ITEMS[9:]),
 ]
 
 st.markdown("""<style>
@@ -363,7 +366,7 @@ with st.sidebar:
                     st.image(str(_icon_path), use_container_width=True)
             with _nav_col:
                 if st.button(
-                    _label, key=f"sidebar_nav_{_icon_file}",
+                    _label, key=f"sidebar_nav_{_label}",
                     type="primary" if st.session_state["internalcomms_active_menu"] == _label else "secondary",
                     use_container_width=True,
                 ):
@@ -375,6 +378,8 @@ menu = st.session_state["internalcomms_active_menu"]
 # ===== Page: Log Book Meeting =====
 if menu == MENU_EXECUTIVE:
     render_executive_dashboard(sb)
+elif menu == MENU_PRESENTATION:
+    render_monthly_presentation(sb)
 
 elif menu == MENU_LOG:
     st.header("Log Book Meeting")

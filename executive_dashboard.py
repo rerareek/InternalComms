@@ -310,6 +310,74 @@ def render(sb):
         return float(sum(v.sum() for v in vals))
     ytd_volume=pair_total(ytd_official,'2026') if ytd_row is not None else pair_total(ytd,'2026')
 
+    # Phase 1: data completeness and reconciliation checks (read-only).
+    with st.expander("Data Quality & Reporting Status", expanded=False):
+        st.caption("Checks reflect the records currently stored in Supabase. "
+                   "They do not certify that source files have been uploaded or approved.")
+        checks = [
+            ("Throughput vs Budget", budget, "month"),
+            ("Terminal Throughput", tp, "month"),
+            ("Shipping Official KPI", shipping_official, "month"),
+            ("Shipping Line Detail", shipping_detail, "month"),
+            ("YTD Shipping Lines", ytd, "month"),
+            ("Operational Metrics", operational, "month"),
+            ("Divert", divert, "month"),
+        ]
+        status_rows = []
+        for title, frame, period_field in checks:
+            valid_months = (pd.to_numeric(frame[period_field], errors="coerce")
+                            if period_field in frame else pd.Series(dtype=float))
+            valid_months = valid_months[valid_months.between(1,12)]
+            latest = int(valid_months.max()) if not valid_months.empty else None
+            status_rows.append({
+                "Source": title,
+                "Records": len(frame),
+                "Latest recorded month": MONTHS[latest-1] if latest else "—",
+                "Status": "No records" if frame.empty else
+                          ("Period not identifiable" if latest is None else
+                           ("Through YTD cutoff" if latest >= month else "Earlier than YTD cutoff")),
+            })
+        st.dataframe(pd.DataFrame(status_rows), hide_index=True, use_container_width=True)
+        st.caption("Latest recorded month is not an upload timestamp. "
+                   "Forecast/budget records may extend beyond the last actual month.")
+        issues = []
+        for title, frame, keys in [
+            ("Throughput vs Budget", budget, ["series", "month"]),
+            ("Terminal Throughput", tp, ["year", "month", "terminal"]),
+            ("Operational Metrics", operational, ["year", "month", "metric"]),
+            ("Divert", divert, ["year", "month"]),
+        ]:
+            if frame.empty:
+                continue
+            if all(k in frame.columns for k in keys):
+                duplicate_count = int(frame.duplicated(subset=keys, keep=False).sum())
+                if duplicate_count:
+                    issues.append(f"{title}: {duplicate_count:,} rows share the same identifying fields.")
+        if not budget.empty and "value" in budget:
+            invalid = int(pd.to_numeric(budget["value"], errors="coerce").isna().sum())
+            if invalid:
+                issues.append(f"Throughput vs Budget: {invalid:,} non-numeric or missing volume values.")
+        if not tp.empty and "value" in tp:
+            invalid = int(pd.to_numeric(tp["value"], errors="coerce").isna().sum())
+            if invalid:
+                issues.append(f"Terminal Throughput: {invalid:,} non-numeric or missing volume values.")
+        if issues:
+            for issue in issues:
+                st.warning(issue)
+        else:
+            st.success("No duplicate keys or invalid volume values detected in the checked datasets.")
+        if ytd_volume is not None and jict is not None:
+            difference = ytd_volume - jict
+            st.metric("YTD shipping total minus JICT terminal total", f"{difference:+,.2f} TEU")
+            if abs(difference) > 1:
+                st.warning("Totals differ. Check whether both sources represent the same JICT scope "
+                           "and reporting period before treating this as a data error.")
+            else:
+                st.success("YTD shipping and JICT terminal totals agree within 1 TEU.")
+
+    st.caption(f"Reporting status · Actual period through {MONTHS[month-1]} {year} "
+               f"· Future months {', '.join(MONTHS[month:]) or 'none'} marked as forecast in the throughput table.")
+
     st.markdown('### Performance at a Glance')
     yoy_val, yoy_note, yoy_color = growth_display(pct(forecast,actual25))
     budget_val, budget_note, budget_color = growth_display(pct(forecast,annual_budget26))
