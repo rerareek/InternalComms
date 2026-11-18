@@ -2,3 +2,5 @@ streamlit
 pandas
 supabase
 plotly
+
+python-pptx>=1.0.2
